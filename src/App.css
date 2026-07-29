@@ -286,6 +286,17 @@ select:focus-visible {
   background: #2f1516;
 }
 
+.notice-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.notice-with-action .text-button {
+  flex: 0 0 auto;
+}
+
 .history-notice {
   border-color: #1f6feb;
   color: #79c0ff;

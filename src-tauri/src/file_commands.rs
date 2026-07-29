@@ -1,3 +1,4 @@
+use crate::diagnostics;
 use crate::event_parser::BodyFormat;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -15,7 +16,24 @@ fn decode_body(data: &str, format: BodyFormat) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
-pub fn save_captured_body(path: String, data: String, format: BodyFormat) -> Result<(), String> {
+pub fn save_captured_body(
+    app: tauri::AppHandle,
+    path: String,
+    data: String,
+    format: BodyFormat,
+) -> Result<(), String> {
+    let result = save_captured_body_to_path(path, data, format);
+    if let Err(error) = &result {
+        diagnostics::write_error(&app, "file", error);
+    }
+    result
+}
+
+fn save_captured_body_to_path(
+    path: String,
+    data: String,
+    format: BodyFormat,
+) -> Result<(), String> {
     let destination = PathBuf::from(path);
     if !destination.is_absolute() {
         return Err("The selected body destination must be an absolute path.".to_owned());

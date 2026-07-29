@@ -30,6 +30,13 @@ export type NetworkInfo = {
   addresses: LanAddress[];
 };
 
+export type DiagnosticLogInfo = {
+  filePath: string;
+  directoryPath: string;
+  previousFilePath: string;
+  maxSizeBytes: number;
+};
+
 export type SessionSummary = {
   id: string;
   startedAt: number;

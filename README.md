@@ -9,6 +9,8 @@
 - Save capture history and reopen previous sessions.
 - Redact sensitive headers and data fields before displaying them.
 - Keep captured data locally on the computer.
+- Open a persistent diagnostic log from the app when capture or networking
+  fails.
 - Use the packaged Windows application without installing Python or mitmproxy.
 
 ## Onboarding
@@ -33,6 +35,11 @@
 9. When finished, click **Stop** and set the phone's Wi-Fi proxy back to
    **Off**.
 
+If the app reports an error, click **Logs** in the toolbar or **Open logs** in
+the error banner. The app opens `app-network-debugger.log` in Windows File
+Explorer. Review the file before sharing it because diagnostic errors can
+contain local paths, hosts, or request URLs.
+
 After changing Wi-Fi networks, refresh the local IP in the desktop application
 and update the proxy server on the phone. Some applications ignore the system
 proxy or use certificate pinning and therefore cannot be captured. This project
@@ -45,10 +52,10 @@ authorized to test.
 
 Windows x64:
 
-- [Download App Network Debugger v0.1.1 (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.1/App-Network-Debugger_0.1.1_windows-x64-setup.exe)
-- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.1/App-Network-Debugger_0.1.1_windows-x64.msi)
-- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.1/SHA256SUMS.txt)
-- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.1)
+- [Download App Network Debugger v0.1.2 (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.2/App-Network-Debugger_0.1.2_windows-x64-setup.exe)
+- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.2/App-Network-Debugger_0.1.2_windows-x64.msi)
+- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.2/SHA256SUMS.txt)
+- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.2)
 
 The installer is not currently code-signed, so Windows SmartScreen may display
 an **Unknown publisher** warning.

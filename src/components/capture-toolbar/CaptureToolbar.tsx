@@ -9,6 +9,7 @@ type CaptureToolbarProps = {
   onBindModeChange: (mode: "local" | "lan") => void;
   onClear: () => void;
   onHistory: () => void;
+  onOpenLogs: () => void;
   onPortChange: (port: number) => void;
   onSearchChange: (query: string) => void;
   onStart: () => void;
@@ -24,6 +25,7 @@ export function CaptureToolbar({
   onBindModeChange,
   onClear,
   onHistory,
+  onOpenLogs,
   onPortChange,
   onSearchChange,
   onStart,
@@ -77,6 +79,9 @@ export function CaptureToolbar({
           onClick={onHistory}
         >
           History
+        </button>
+        <button className="button" type="button" onClick={onOpenLogs}>
+          Logs
         </button>
       </div>
 

@@ -1,3 +1,4 @@
+use crate::diagnostics;
 use crate::event_parser::{BodyFormat, BridgeEvent, CapturedBody, HeaderEntry, WebSocketDirection};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -804,33 +805,53 @@ fn i64_to_u64(value: i64) -> u64 {
 }
 
 #[tauri::command]
-pub fn list_sessions(store: tauri::State<'_, SessionStore>) -> Result<Vec<SessionSummary>, String> {
-    store.list_sessions()
+pub fn list_sessions(
+    app: AppHandle,
+    store: tauri::State<'_, SessionStore>,
+) -> Result<Vec<SessionSummary>, String> {
+    let result = store.list_sessions();
+    log_storage_command_error(&app, "list sessions", &result);
+    result
 }
 
 #[tauri::command]
 pub fn load_session_events(
+    app: AppHandle,
     store: tauri::State<'_, SessionStore>,
     session_id: String,
 ) -> Result<Vec<BridgeEvent>, String> {
-    store.load_session_events(&session_id)
+    let result = store.load_session_events(&session_id);
+    log_storage_command_error(&app, "load session", &result);
+    result
 }
 
 #[tauri::command]
 pub fn rename_session(
+    app: AppHandle,
     store: tauri::State<'_, SessionStore>,
     session_id: String,
     name: String,
 ) -> Result<(), String> {
-    store.rename_session(&session_id, &name)
+    let result = store.rename_session(&session_id, &name);
+    log_storage_command_error(&app, "rename session", &result);
+    result
 }
 
 #[tauri::command]
 pub fn delete_session(
+    app: AppHandle,
     store: tauri::State<'_, SessionStore>,
     session_id: String,
 ) -> Result<(), String> {
-    store.delete_session(&session_id)
+    let result = store.delete_session(&session_id);
+    log_storage_command_error(&app, "delete session", &result);
+    result
+}
+
+fn log_storage_command_error<T>(app: &AppHandle, operation: &str, result: &Result<T, String>) {
+    if let Err(error) = result {
+        diagnostics::write_error(app, "storage", &format!("{operation} failed: {error}"));
+    }
 }
 
 #[cfg(test)]

@@ -1,16 +1,17 @@
+use crate::diagnostics;
 use crate::event_parser::parse_event_line;
 use crate::storage::SessionStore;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::fs;
+use std::io::{self, BufRead, BufReader, Read};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(windows)]
@@ -135,6 +136,14 @@ impl CaptureManager {
         app: AppHandle,
         config: CaptureConfig,
     ) -> Result<CaptureStatusSnapshot, String> {
+        diagnostics::write_info(
+            &app,
+            "capture",
+            &format!(
+                "Start requested; host={}; port={}; body_limit={}",
+                config.host, config.port, config.body_limit
+            ),
+        );
         config.validate().inspect_err(|message| {
             self.mark_failed(&app, message.clone());
         })?;
@@ -145,7 +154,9 @@ impl CaptureManager {
                 runtime.status,
                 CaptureStatus::Starting | CaptureStatus::Running | CaptureStatus::Stopping
             ) {
-                return Err("Capture is already active or changing state.".to_owned());
+                let message = "Capture is already active or changing state.".to_owned();
+                diagnostics::write_warn(&app, "capture", &message);
+                return Err(message);
             }
             runtime.status = CaptureStatus::Starting;
             runtime.config = config.clone();
@@ -169,6 +180,15 @@ impl CaptureManager {
         let bridge_path = resolve_bridge_path(&app).inspect_err(|message| {
             self.mark_failed(&app, message.clone());
         })?;
+        diagnostics::write_info(
+            &app,
+            "capture",
+            &format!(
+                "Runtime resolved; proxy={}; bridge={}",
+                executable.display(),
+                bridge_path.display()
+            ),
+        );
         let runtime_directory = app_runtime_directory(&app).inspect_err(|message| {
             self.mark_failed(&app, message.clone());
         })?;
@@ -205,6 +225,11 @@ impl CaptureManager {
             self.mark_failed(&app, message.clone());
             message
         })?;
+        diagnostics::write_info(
+            &app,
+            "capture",
+            &format!("Proxy process spawned; pid={}", child.id()),
+        );
         let process_job = match attach_kill_on_close_job(&child) {
             Ok(process_job) => process_job,
             Err(message) => {
@@ -245,6 +270,14 @@ impl CaptureManager {
             self.mark_failed(&app, message.clone());
             return Err(message);
         }
+        diagnostics::write_info(
+            &app,
+            "capture",
+            &format!(
+                "Proxy is accepting connections on {}:{}.",
+                config.host, config.port
+            ),
+        );
 
         if let Err(error) = app.state::<SessionStore>().start_session() {
             let _ = child.kill();
@@ -265,14 +298,21 @@ impl CaptureManager {
 
         self.spawn_exit_monitor(app.clone(), generation);
         self.emit_status(&app);
+        diagnostics::write_info(&app, "capture", &format!("Capture is running; pid={pid}."));
 
         Ok(self.snapshot())
     }
 
     pub fn stop(&self, app: Option<&AppHandle>) -> Result<CaptureStatusSnapshot, String> {
+        if let Some(app) = app {
+            diagnostics::write_info(app, "capture", "Stop requested.");
+        }
         let (child, process_job) = {
             let mut runtime = self.lock_runtime();
             if runtime.status == CaptureStatus::Stopped {
+                if let Some(app) = app {
+                    diagnostics::write_info(app, "capture", "Capture was already stopped.");
+                }
                 return Ok(snapshot_from_runtime(&runtime));
             }
             runtime.status = CaptureStatus::Stopping;
@@ -318,6 +358,10 @@ impl CaptureManager {
 
         if let Some(app) = app {
             self.emit_status(app);
+            match &stop_result {
+                Ok(()) => diagnostics::write_info(app, "capture", "Capture stopped."),
+                Err(error) => diagnostics::write_error(app, "capture", error),
+            }
         }
 
         stop_result.map(|()| self.snapshot())
@@ -333,10 +377,12 @@ impl CaptureManager {
     }
 
     pub fn shutdown(&self, app: &AppHandle) {
+        diagnostics::write_info(app, "capture", "Capture shutdown cleanup started.");
         let _ = self.stop(Some(app));
     }
 
     fn mark_failed(&self, app: &AppHandle, message: String) {
+        diagnostics::write_error(app, "capture", &message);
         {
             let mut runtime = self.lock_runtime();
             runtime.status = CaptureStatus::Failed;
@@ -379,15 +425,21 @@ impl CaptureManager {
                             runtime.child = None;
                             runtime.process_job = None;
                             runtime.pid = None;
-                            if runtime.status == CaptureStatus::Stopping || exit_status.success() {
-                                runtime.status = CaptureStatus::Stopped;
-                                runtime.message = None;
-                            } else {
+                            let failed =
+                                runtime.status != CaptureStatus::Stopping && !exit_status.success();
+                            if failed {
                                 runtime.status = CaptureStatus::Failed;
                                 runtime.message =
                                     Some(format!("mitmdump exited unexpectedly: {exit_status}"));
+                            } else {
+                                runtime.status = CaptureStatus::Stopped;
+                                runtime.message = None;
                             }
-                            Some(snapshot_from_runtime(&runtime))
+                            Some((
+                                snapshot_from_runtime(&runtime),
+                                failed,
+                                format!("Proxy process exited; status={exit_status}."),
+                            ))
                         }
                         Ok(None) => None,
                         Err(error) => {
@@ -397,12 +449,21 @@ impl CaptureManager {
                             runtime.status = CaptureStatus::Failed;
                             runtime.message =
                                 Some(format!("Cannot monitor mitmdump process: {error}"));
-                            Some(snapshot_from_runtime(&runtime))
+                            Some((
+                                snapshot_from_runtime(&runtime),
+                                true,
+                                format!("Cannot monitor proxy process: {error}"),
+                            ))
                         }
                     }
                 };
 
-                if let Some(snapshot) = terminal_status {
+                if let Some((snapshot, failed, diagnostic_message)) = terminal_status {
+                    if failed {
+                        diagnostics::write_error(&app, "capture", &diagnostic_message);
+                    } else {
+                        diagnostics::write_info(&app, "capture", &diagnostic_message);
+                    }
                     let _ = app.emit(CAPTURE_STATUS_EVENT_NAME, snapshot);
                     return;
                 }
@@ -464,8 +525,9 @@ fn spawn_stdout_reader(app: AppHandle, stdout: impl std::io::Read + Send + 'stat
     thread::spawn(move || {
         let read_result = read_output_lines(stdout, |line, had_invalid_utf8| {
             if had_invalid_utf8 {
-                append_application_log(
+                diagnostics::write_warn(
                     &app,
+                    "proxy",
                     "mitmdump stdout contained invalid UTF-8; replacement characters were used",
                 );
             }
@@ -473,7 +535,11 @@ fn spawn_stdout_reader(app: AppHandle, stdout: impl std::io::Read + Send + 'stat
             match parse_event_line(line) {
                 Ok(Some(event)) => {
                     if let Err(error) = app.state::<SessionStore>().persist_event(&event) {
-                        append_application_log(&app, &format!("storage error: {error}"));
+                        diagnostics::write_error(
+                            &app,
+                            "storage",
+                            &format!("Cannot persist captured event: {error}"),
+                        );
                         let _ = app.emit(
                             BACKEND_WARNING_EVENT_NAME,
                             "A captured event could not be saved to history.",
@@ -483,7 +549,11 @@ fn spawn_stdout_reader(app: AppHandle, stdout: impl std::io::Read + Send + 'stat
                 }
                 Ok(None) => {}
                 Err(error) => {
-                    append_application_log(&app, &format!("bridge parse error: {error}"));
+                    diagnostics::write_error(
+                        &app,
+                        "bridge",
+                        &format!("Cannot parse bridge event: {error}"),
+                    );
                     let _ = app.emit(
                         BACKEND_WARNING_EVENT_NAME,
                         "A malformed bridge event was ignored.",
@@ -493,7 +563,7 @@ fn spawn_stdout_reader(app: AppHandle, stdout: impl std::io::Read + Send + 'stat
         });
 
         if let Err(error) = read_result {
-            append_application_log(&app, &format!("stdout read error: {error}"));
+            diagnostics::write_error(&app, "proxy", &format!("Cannot read proxy stdout: {error}"));
         }
     });
 }
@@ -502,16 +572,17 @@ fn spawn_stderr_reader(app: AppHandle, stderr: impl std::io::Read + Send + 'stat
     thread::spawn(move || {
         let read_result = read_output_lines(stderr, |line, had_invalid_utf8| {
             if had_invalid_utf8 {
-                append_application_log(
+                diagnostics::write_warn(
                     &app,
+                    "proxy",
                     "mitmdump stderr contained invalid UTF-8; replacement characters were used",
                 );
             }
-            append_application_log(&app, &format!("mitmdump: {line}"));
+            diagnostics::write_error(&app, "proxy", line);
         });
 
         if let Err(error) = read_result {
-            append_application_log(&app, &format!("stderr read error: {error}"));
+            diagnostics::write_error(&app, "proxy", &format!("Cannot read proxy stderr: {error}"));
         }
     });
 }
@@ -536,23 +607,6 @@ fn read_output_lines(output: impl Read, mut handle_line: impl FnMut(&str, bool))
         let line = String::from_utf8_lossy(&buffer);
         let had_invalid_utf8 = matches!(&line, Cow::Owned(_));
         handle_line(line.as_ref(), had_invalid_utf8);
-    }
-}
-
-fn append_application_log(app: &AppHandle, message: &str) {
-    let Ok(log_directory) = app.path().app_log_dir() else {
-        return;
-    };
-    if fs::create_dir_all(&log_directory).is_err() {
-        return;
-    }
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs());
-    let log_path = log_directory.join("app-network-debugger.log");
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) {
-        let _ = writeln!(file, "{timestamp} {message}");
     }
 }
 

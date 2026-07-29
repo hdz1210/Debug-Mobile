@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2026-07-30
+
+### Added
+
+- Persistent, timestamped diagnostic logging for application startup,
+  shutdown, capture lifecycle, proxy stderr, storage, network, file, and
+  frontend failures.
+- A **Logs** toolbar action and an **Open logs** action on error banners.
+- Automatic detection of an unclean previous shutdown.
+- Log rotation at 5 MB with one previous log retained.
+
 ## [0.1.1] - 2026-07-29
 
 ### Fixed

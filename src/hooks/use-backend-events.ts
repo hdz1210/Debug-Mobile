@@ -5,6 +5,7 @@ import {
   listenForBackendWarnings,
   listenForBridgeEvents,
   listenForCaptureStatus,
+  writeFrontendDiagnostic,
 } from "../lib/ipc";
 import { useFlowStore } from "../stores/flow-store";
 
@@ -13,6 +14,24 @@ export function useBackendEvents(): void {
     let cancelled = false;
     const unlisteners: UnlistenFn[] = [];
     const store = useFlowStore.getState();
+    const recordFrontendError = (message: string) => {
+      void writeFrontendDiagnostic("error", message).catch(() => undefined);
+    };
+    const handleWindowError = (event: ErrorEvent) => {
+      recordFrontendError(`Unhandled window error: ${event.message}`);
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason =
+        event.reason instanceof Error
+          ? event.reason.message
+          : String(event.reason);
+      recordFrontendError(`Unhandled promise rejection: ${reason}`);
+    };
+    window.addEventListener("error", handleWindowError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    void writeFrontendDiagnostic("info", "Frontend initialized.").catch(
+      () => undefined,
+    );
 
     const register = async () => {
       try {
@@ -40,11 +59,12 @@ export function useBackendEvents(): void {
         }
       } catch (error) {
         if (!cancelled) {
-          store.setBackendWarning(
+          const message =
             error instanceof Error
               ? error.message
-              : "Cannot connect to the desktop backend.",
-          );
+              : "Cannot connect to the desktop backend.";
+          store.setBackendWarning(message);
+          recordFrontendError(`Backend event registration failed: ${message}`);
         }
       }
     };
@@ -53,6 +73,11 @@ export function useBackendEvents(): void {
     return () => {
       cancelled = true;
       unlisteners.forEach((unlisten) => unlisten());
+      window.removeEventListener("error", handleWindowError);
+      window.removeEventListener(
+        "unhandledrejection",
+        handleUnhandledRejection,
+      );
     };
   }, []);
 }

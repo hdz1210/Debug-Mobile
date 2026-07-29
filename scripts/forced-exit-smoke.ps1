@@ -4,6 +4,8 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $smokeDirectory = Join-Path $projectRoot "runtime\forced-exit-smoke"
 $applicationPath = Join-Path $projectRoot "src-tauri\target\release\app-network-debugger.exe"
 $cdpScript = Join-Path $PSScriptRoot "cdp-ui-smoke.mjs"
+$expectedVersion = (Get-Content -Raw (Join-Path $projectRoot "package.json") |
+    ConvertFrom-Json).version
 
 if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue) {
     throw "Port 8080 is busy before the forced-exit smoke test."
@@ -36,6 +38,7 @@ $previousBrowserArguments = $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
 $application = $null
 $cdp = $null
 $proxyPid = $null
+$diagnosticLogPath = $null
 
 try {
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=19346"
@@ -106,6 +109,20 @@ try {
     if ($null -eq $proxyPid) {
         throw "Capture did not start in time."
     }
+    if (-not $cdp.WaitForExit(5000)) {
+        throw "The diagnostic capture setup did not finish in time."
+    }
+    $cdpResult = Get-Content `
+        -Raw `
+        -LiteralPath (Join-Path $smokeDirectory "cdp.stdout.log") |
+        ConvertFrom-Json
+    $diagnosticLogPath = $cdpResult.diagnosticLog.filePath
+    if (
+        -not $diagnosticLogPath -or
+        -not (Test-Path -LiteralPath $diagnosticLogPath -PathType Leaf)
+    ) {
+        throw "The diagnostic log was not created."
+    }
 
     Stop-Process -Id $application.Id -Force
     Wait-Process -Id $application.Id -ErrorAction SilentlyContinue
@@ -124,8 +141,19 @@ try {
     if (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue) {
         throw "Port 8080 remained occupied after application termination."
     }
+    $diagnosticText = Get-Content -Raw -LiteralPath $diagnosticLogPath
+    if (
+        -not $diagnosticText.Contains(
+            "Session started; version=$expectedVersion; pid=$($application.Id)"
+        ) -or
+        -not $diagnosticText.Contains("Capture is running; pid=")
+    ) {
+        throw "The diagnostic log is missing application or capture lifecycle entries."
+    }
 
     Write-Output "FORCED_EXIT_CLEANUP=PASS"
+    Write-Output "DIAGNOSTIC_LOG=PASS"
+    Write-Output "DIAGNOSTIC_LOG_PATH=$diagnosticLogPath"
     Write-Output "APP_PID=$($application.Id)"
     Write-Output "PROXY_PID=$proxyPid"
     Write-Output "PROXY_PATH=$proxyPath"

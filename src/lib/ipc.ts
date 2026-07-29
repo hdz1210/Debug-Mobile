@@ -6,6 +6,7 @@ import type {
   CapturedBody,
   CaptureConfig,
   CaptureStatusSnapshot,
+  DiagnosticLogInfo,
   NetworkInfo,
   SessionSummary,
 } from "../types/events";
@@ -32,6 +33,21 @@ export function getCaptureStatus(): Promise<CaptureStatusSnapshot> {
 
 export function getNetworkInfo(): Promise<NetworkInfo> {
   return invoke("get_network_info");
+}
+
+export function getDiagnosticLogInfo(): Promise<DiagnosticLogInfo> {
+  return invoke("get_diagnostic_log_info");
+}
+
+export function revealDiagnosticLog(): Promise<DiagnosticLogInfo> {
+  return invoke("reveal_diagnostic_log");
+}
+
+export function writeFrontendDiagnostic(
+  level: "info" | "warn" | "error",
+  message: string,
+): Promise<void> {
+  return invoke("write_frontend_diagnostic", { level, message });
 }
 
 export async function saveCapturedBody(

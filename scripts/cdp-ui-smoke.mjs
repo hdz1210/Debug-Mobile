@@ -166,6 +166,9 @@ try {
   const detectedLanIp = await evaluate(
     "document.querySelector('.lan-proxy-address')?.textContent?.trim()",
   );
+  const diagnosticLog = await evaluate(
+    `window.__TAURI_INTERNALS__.invoke("get_diagnostic_log_info")`,
+  );
 
   await evaluate(
     `localStorage.removeItem("appdbg.capture-consent.v1"); ${clickButtonExpression("Start capture")}`,
@@ -183,7 +186,7 @@ try {
 
   if (mode === "start-only") {
     process.stdout.write(
-      `${JSON.stringify({ captureStarted: true, detectedLanIp })}\n`,
+      `${JSON.stringify({ captureStarted: true, detectedLanIp, diagnosticLog })}\n`,
     );
     captureStarted = false;
     socket.close();
@@ -273,6 +276,7 @@ try {
     `${JSON.stringify({
       captureStarted: true,
       detectedLanIp,
+      diagnosticLog,
       capturedRows: rowCount,
       selectedUrl,
       verifiedTabs: ["overview", "headers", "query", "response"],

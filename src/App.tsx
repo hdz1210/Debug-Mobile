@@ -10,6 +10,7 @@ import { useBackendEvents } from "./hooks/use-backend-events";
 import {
   getNetworkInfo,
   loadSessionEvents,
+  revealDiagnosticLog,
   startCapture,
   stopCapture,
 } from "./lib/ipc";
@@ -183,6 +184,14 @@ function App() {
     }
   };
 
+  const handleOpenLogs = async () => {
+    try {
+      await revealDiagnosticLog();
+    } catch (error) {
+      setActionError(readableError(error));
+    }
+  };
+
   const statusMessage = actionError ?? capture.message ?? backendWarning;
 
   return (
@@ -196,6 +205,7 @@ function App() {
         onBindModeChange={setBindMode}
         onClear={clearFlows}
         onHistory={() => setIsHistoryOpen(true)}
+        onOpenLogs={() => void handleOpenLogs()}
         onPortChange={(nextPort) => {
           if (Number.isFinite(nextPort)) {
             setPort(Math.min(65535, Math.max(1, Math.round(nextPort))));
@@ -228,8 +238,15 @@ function App() {
       ) : null}
 
       {statusMessage ? (
-        <div className="notice notice-error" role="alert">
-          {statusMessage}
+        <div className="notice notice-error notice-with-action" role="alert">
+          <span>{statusMessage}</span>
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => void handleOpenLogs()}
+          >
+            Open logs
+          </button>
         </div>
       ) : null}
 

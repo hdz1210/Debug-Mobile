@@ -1,3 +1,4 @@
+use crate::diagnostics;
 use if_addrs::{IfAddr, get_if_addrs};
 use serde::Serialize;
 use std::cmp::Ordering;
@@ -27,9 +28,12 @@ struct Candidate {
 }
 
 #[tauri::command]
-pub fn get_network_info() -> Result<NetworkInfo, String> {
-    let interfaces =
-        get_if_addrs().map_err(|error| format!("Cannot scan network interfaces: {error}"))?;
+pub fn get_network_info(app: tauri::AppHandle) -> Result<NetworkInfo, String> {
+    let interfaces = get_if_addrs().map_err(|error| {
+        let message = format!("Cannot scan network interfaces: {error}");
+        diagnostics::write_error(&app, "network", &message);
+        message
+    })?;
     let routed_address = detect_routed_ipv4();
     let mut seen = HashSet::new();
     let mut candidates = interfaces
