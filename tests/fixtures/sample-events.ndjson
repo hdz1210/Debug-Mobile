@@ -1,0 +1,8 @@
+mitmdump startup output is ignored
+APPDBG_EVENT:{"event":"request_started","flowId":"sample-flow","method":"POST","url":"https://api.example.com/login","host":"api.example.com","port":443,"scheme":"https","httpVersion":"HTTP/2.0","headers":[["content-type","application/json"],["x-trace","first"],["x-trace","second"]],"startedAt":1720000000.123}
+APPDBG_EVENT:{"event":"request_completed","flowId":"sample-flow","body":{"format":"text","contentType":"application/json","data":"{\"email\":\"test@example.com\"}","size":28,"truncated":false},"endedAt":1720000000.22}
+APPDBG_EVENT:{"event":"response_started","flowId":"sample-flow","statusCode":200,"reason":"OK","httpVersion":"HTTP/2.0","headers":[["content-type","application/json"]],"startedAt":1720000000.4}
+APPDBG_EVENT:{"event":"response_completed","flowId":"sample-flow","statusCode":200,"body":{"format":"text","contentType":"application/json","data":"{\"success\":true}","size":16,"truncated":false},"endedAt":1720000000.5,"durationMs":377.0}
+APPDBG_EVENT:{"event":"flow_error","flowId":"failed-flow","message":"TLS handshake failed"}
+APPDBG_EVENT:{"event":"request_started","flowId":"websocket-flow","method":"GET","url":"wss://api.example.com/socket","host":"api.example.com","port":443,"scheme":"https","httpVersion":"HTTP/1.1","headers":[["upgrade","websocket"]],"startedAt":1720000001.0}
+APPDBG_EVENT:{"event":"websocket_message","flowId":"websocket-flow","direction":"client_to_server","format":"text","data":"ping","size":4,"timestamp":1720000001.1}
