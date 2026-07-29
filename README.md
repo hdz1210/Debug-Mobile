@@ -48,10 +48,27 @@ Phases 1 through 4 are implemented:
   JSON/form fields before stdout or IPC
 - SQLite session metadata, filesystem body storage, and History actions to
   reopen, rename, and delete saved sessions
+- standalone Windows packaging with a verified mitmproxy 12.2.3 `mitmdump.exe`,
+  the capture addon, and required license notices bundled in the installer
 
 Storage quotas, settings UI, JSON/HAR export, complete CA management, mobile
-onboarding, and packaged sidecars remain later-phase work. The application
-never inserts simulated traffic.
+onboarding, and signed multi-platform packages remain later-phase work. The
+application never inserts simulated traffic.
+
+## Download for Windows
+
+Download the installer from the
+[v0.1.0 release](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.0):
+
+- `App-Network-Debugger_0.1.0_windows-x64-setup.exe` is the recommended
+  installer.
+- `App-Network-Debugger_0.1.0_windows-x64.msi` is provided for managed Windows
+  environments.
+- `SHA256SUMS.txt` contains the checksums for both installers.
+
+This preview is not code-signed. Windows SmartScreen may show an
+**Unknown publisher** warning. Verify the SHA-256 checksum before installing.
+The package does not download mitmproxy at runtime.
 
 ## Prerequisites
 
@@ -61,9 +78,10 @@ never inserts simulated traffic.
 - Python 3.11 or later
 - Windows WebView2 for Windows desktop builds
 
-Development is pinned to mitmproxy `12.2.3`. Production will use verified,
-version-locked standalone binaries rather than downloading executables at
-runtime.
+Development and Windows packages are pinned to mitmproxy `12.2.3`. Release
+builds download the official archive at build time, verify its fixed SHA-256,
+and bundle the standalone executable. The installed application never
+downloads or replaces the executable at runtime.
 
 ## Development setup
 
@@ -106,11 +124,15 @@ pnpm build
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-Installer builds will be introduced with the versioned sidecar packaging work:
+Create Windows MSI and NSIS installers:
 
 ```powershell
 pnpm tauri build
 ```
+
+The build runs `scripts/prepare-release-sidecar.ps1` automatically. You can
+also run `pnpm release:prepare` directly to download and verify the pinned
+mitmproxy archive before building.
 
 ## How the mitmproxy sidecar works
 
@@ -189,19 +211,27 @@ pnpm test:ui-smoke
 Integration tests will add a local HTTP/WebSocket test server and send real
 requests through mitmdump.
 
+After building, an administratively extracted MSI can be checked with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/package-ui-smoke.ps1 `
+  -PackageRoot "C:\path\to\extracted\PFiles\App Network Debugger"
+```
+
 ## Packaging
 
-Production packages will bundle one verified mitmdump executable per supported
-Tauri target triple:
+The current Windows x64 package bundles the verified mitmproxy 12.2.3
+`mitmdump.exe` and `bridge.py` as Tauri resources. Future packages are planned
+for these additional Tauri target triples:
 
-- `x86_64-pc-windows-msvc`
 - `x86_64-apple-darwin`
 - `aarch64-apple-darwin`
 - `x86_64-unknown-linux-gnu`, if Linux support remains practical
 
-Checksums, mitmproxy version, third-party notices, and platform build
-instructions will be committed with the packaging phase. Runtime downloads of
-unverified executables are not allowed.
+The pinned URL and archive SHA-256 are recorded in
+`scripts/prepare-release-sidecar.ps1`; attribution is in
+`THIRD_PARTY_NOTICES.md`. Runtime downloads of executables are not allowed.
 
 ## Troubleshooting
 
@@ -214,8 +244,8 @@ unverified executables are not allowed.
   bypass pinning.
 - **Phone cannot connect:** bind `0.0.0.0`, verify both devices share a LAN, and
   allow the port through the firewall.
-- **mitmdump binary missing:** install `requirements-dev.txt` in `.venv`; the
-  bundled binary is added during packaging.
+- **mitmdump binary missing in development:** install `requirements-dev.txt`
+  in `.venv`; packaged builds use the bundled executable.
 - **CA reset or expired:** remove the old certificate from the device, restart
   mitmdump with the app confdir, and install the newly generated CA.
 
@@ -239,5 +269,5 @@ crates, JavaScript packages, and all bundled dependencies.
 - Certificate pinning is not bypassed.
 - QUIC/HTTP/3 capture is outside the MVP.
 - Custom encrypted protocols are not decoded.
-- The development build resolves mitmdump from `.venv`; production sidecar
-  bundling is not complete yet.
+- Windows installers are not code-signed yet.
+- macOS and Linux installers are not published yet.

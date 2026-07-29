@@ -140,7 +140,7 @@ impl CaptureManager {
             return Err(message);
         }
 
-        let executable = resolve_mitmdump_path().inspect_err(|message| {
+        let executable = resolve_mitmdump_path(&app).inspect_err(|message| {
             self.mark_failed(&app, message.clone());
         })?;
         let bridge_path = resolve_bridge_path(&app).inspect_err(|message| {
@@ -490,13 +490,6 @@ fn app_runtime_directory(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 fn resolve_bridge_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let development_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("addons")
-        .join("bridge.py");
-    if development_path.is_file() {
-        return Ok(development_path);
-    }
-
     let resource_path = app
         .path()
         .resource_dir()
@@ -507,10 +500,17 @@ fn resolve_bridge_path(app: &AppHandle) -> Result<PathBuf, String> {
         return Ok(resource_path);
     }
 
+    let development_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("addons")
+        .join("bridge.py");
+    if development_path.is_file() {
+        return Ok(development_path);
+    }
+
     Err("bridge.py was not found in development or packaged resources.".to_owned())
 }
 
-fn resolve_mitmdump_path() -> Result<PathBuf, String> {
+fn resolve_mitmdump_path(app: &AppHandle) -> Result<PathBuf, String> {
     if let Some(path) = env::var_os("APPDBG_MITMDUMP_PATH").map(PathBuf::from) {
         if path.is_file() {
             return Ok(path);
@@ -519,6 +519,20 @@ fn resolve_mitmdump_path() -> Result<PathBuf, String> {
             "APPDBG_MITMDUMP_PATH does not point to a file: {}",
             path.display()
         ));
+    }
+
+    let resource_path = app
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("Cannot resolve resource directory: {error}"))?
+        .join("bin")
+        .join(if cfg!(windows) {
+            "mitmdump.exe"
+        } else {
+            "mitmdump"
+        });
+    if resource_path.is_file() {
+        return Ok(resource_path);
     }
 
     let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -545,10 +559,7 @@ fn resolve_mitmdump_path() -> Result<PathBuf, String> {
         return Ok(path);
     }
 
-    Err(
-        "mitmdump binary not found. Create .venv from requirements-dev.txt or set APPDBG_MITMDUMP_PATH."
-            .to_owned(),
-    )
+    Err("mitmdump binary not found in packaged resources, the development .venv, or PATH. Set APPDBG_MITMDUMP_PATH to override it.".to_owned())
 }
 
 fn find_on_path(executable_name: &str) -> Option<PathBuf> {
