@@ -1,3 +1,7 @@
+param(
+    [string]$MitmdumpPath = ""
+)
+
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -9,7 +13,12 @@ $serverError = Join-Path $smokeDirectory "server.stderr.log"
 $proxyOutput = Join-Path $smokeDirectory "mitmdump.stdout.log"
 $proxyError = Join-Path $smokeDirectory "mitmdump.stderr.log"
 $python = Join-Path $projectRoot ".venv\Scripts\python.exe"
-$mitmdump = Join-Path $projectRoot ".venv\Scripts\mitmdump.exe"
+$mitmdump = if ($MitmdumpPath) {
+    [System.IO.Path]::GetFullPath($MitmdumpPath)
+}
+else {
+    Join-Path $projectRoot ".venv\Scripts\mitmdump.exe"
+}
 $addon = Join-Path $projectRoot "src-tauri\addons\bridge.py"
 $confDirectory = Join-Path $smokeDirectory "mitmproxy"
 
@@ -71,8 +80,15 @@ try {
     Start-Sleep -Seconds 2
 }
 finally {
+    $proxyChildren = @(
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.ParentProcessId -eq $proxy.Id }
+    )
+    foreach ($proxyChild in $proxyChildren) {
+        Stop-Process -Id $proxyChild.ProcessId -Force -ErrorAction SilentlyContinue
+    }
     if (-not $proxy.HasExited) {
-        Stop-Process -Id $proxy.Id
+        Stop-Process -Id $proxy.Id -Force
     }
     if (-not $server.HasExited) {
         Stop-Process -Id $server.Id

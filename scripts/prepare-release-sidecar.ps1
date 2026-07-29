@@ -1,52 +1,90 @@
 $ErrorActionPreference = "Stop"
 
-$mitmproxyVersion = "12.2.3"
-$archiveSha256 = "04a01ea95ae96df75058a893e774957d294e69012dab1f4e256ce2b0c6725483"
-$archiveUrl = "https://downloads.mitmproxy.org/$mitmproxyVersion/mitmproxy-$mitmproxyVersion-windows-x86_64.zip"
-
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$downloadDirectory = Join-Path $projectRoot "runtime\release-inputs"
-$archivePath = Join-Path $downloadDirectory "mitmproxy-$mitmproxyVersion-windows-x86_64.zip"
+$requirementsPath = Join-Path $projectRoot "requirements-release.txt"
+$entryPointPath = Join-Path $projectRoot "src-tauri\sidecar\mitmdump_entry.py"
+$releaseBuildDirectory = Join-Path $projectRoot "runtime\release-build"
+$releaseEnvironment = Join-Path $releaseBuildDirectory "venv"
+$releasePython = Join-Path $releaseEnvironment "Scripts\python.exe"
+$releasePyInstaller = Join-Path $releaseEnvironment "Scripts\pyinstaller.exe"
 $resourceDirectory = Join-Path $projectRoot "src-tauri\release-resources"
 $mitmdumpPath = Join-Path $resourceDirectory "mitmdump.exe"
+$recipeMarker = Join-Path $releaseBuildDirectory "sidecar.recipe.sha256"
 
-New-Item -ItemType Directory -Force -Path $downloadDirectory, $resourceDirectory | Out-Null
-
-function Test-ArchiveHash {
-    if (-not (Test-Path -LiteralPath $archivePath -PathType Leaf)) {
-        return $false
-    }
-
-    $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    return $actualHash -eq $archiveSha256
-}
-
-if (-not (Test-ArchiveHash)) {
-    if (Test-Path -LiteralPath $archivePath) {
-        Remove-Item -LiteralPath $archivePath -Force
-    }
-
-    Write-Host "Downloading mitmproxy $mitmproxyVersion from the official release archive..."
-    Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath
-}
-
-if (-not (Test-ArchiveHash)) {
-    throw "mitmproxy archive SHA-256 verification failed."
-}
-
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$archive = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
+$recipeInput = @(
+    (Get-FileHash -LiteralPath $requirementsPath -Algorithm SHA256).Hash,
+    (Get-FileHash -LiteralPath $entryPointPath -Algorithm SHA256).Hash
+) -join "`n"
+$recipeBytes = [System.Text.Encoding]::UTF8.GetBytes($recipeInput)
+$sha256 = [System.Security.Cryptography.SHA256]::Create()
 try {
-    $entry = $archive.GetEntry("mitmdump.exe")
-    if ($null -eq $entry) {
-        throw "mitmdump.exe was not found in the verified archive."
-    }
-
-    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $mitmdumpPath, $true)
+    $recipeHash = -join (
+        $sha256.ComputeHash($recipeBytes) |
+            ForEach-Object { $_.ToString("x2") }
+    )
 }
 finally {
-    $archive.Dispose()
+    $sha256.Dispose()
+}
+$previousRecipe = if (Test-Path -LiteralPath $recipeMarker) {
+    (Get-Content -Raw -LiteralPath $recipeMarker).Trim()
+}
+else {
+    ""
 }
 
+if (
+    $previousRecipe -eq $recipeHash -and
+    (Test-Path -LiteralPath $mitmdumpPath -PathType Leaf)
+) {
+    $metadata = Get-Item -LiteralPath $mitmdumpPath
+    Write-Host "Prepared cached restricted mitmdump sidecar ($($metadata.Length) bytes)."
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $releaseBuildDirectory, $resourceDirectory |
+    Out-Null
+
+if (-not (Test-Path -LiteralPath $releasePython -PathType Leaf)) {
+    $bootstrapPython = (Get-Command python.exe -ErrorAction Stop).Source
+    & $bootstrapPython -m venv $releaseEnvironment
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cannot create the release sidecar Python environment."
+    }
+}
+
+& $releasePython -m pip install `
+    --disable-pip-version-check `
+    --requirement $requirementsPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Cannot install the pinned release sidecar dependencies."
+}
+
+& $releasePyInstaller `
+    --noconfirm `
+    --clean `
+    --onefile `
+    --console `
+    --name mitmdump `
+    --exclude-module pydivert `
+    --exclude-module mitmproxy_windows `
+    --distpath $resourceDirectory `
+    --workpath (Join-Path $releaseBuildDirectory "pyinstaller") `
+    --specpath $releaseBuildDirectory `
+    $entryPointPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Cannot build the restricted mitmdump sidecar."
+}
+
+if (-not (Test-Path -LiteralPath $mitmdumpPath -PathType Leaf)) {
+    throw "The restricted mitmdump sidecar was not produced."
+}
+
+[System.IO.File]::WriteAllText(
+    $recipeMarker,
+    $recipeHash,
+    [System.Text.UTF8Encoding]::new($false)
+)
+
 $metadata = Get-Item -LiteralPath $mitmdumpPath
-Write-Host "Prepared $($metadata.FullName) ($($metadata.Length) bytes) from verified mitmproxy archive."
+Write-Host "Prepared restricted mitmdump 12.2.3 sidecar ($($metadata.Length) bytes)."

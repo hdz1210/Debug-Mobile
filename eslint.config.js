@@ -10,6 +10,7 @@ export default tseslint.config(
       ".venv/**",
       "dist/**",
       "node_modules/**",
+      "runtime/**",
       "src-tauri/target/**",
     ],
   },

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-07-29
+
+### Fixed
+
+- Ensure Windows terminates the bundled mitmdump process when the desktop
+  application exits, crashes, or is force-closed, preventing an orphan proxy
+  from keeping the configured port occupied.
+- Package an explicit-proxy-only Windows sidecar without the unused WinDivert
+  transparent/local-capture modules.
+- Report capture as running only after the proxy is accepting connections.
+
 ## [0.1.0] - 2026-07-29
 
 ### Added

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-const [cdpPort = "19333", proxyPort = "8080", targetUrl] =
+const [cdpPort = "19333", proxyPort = "8080", targetUrl, mode = "full"] =
   process.argv.slice(2);
 
 if (!targetUrl) {
@@ -180,6 +180,15 @@ try {
     "capture to enter running state",
   );
   captureStarted = true;
+
+  if (mode === "start-only") {
+    process.stdout.write(
+      `${JSON.stringify({ captureStarted: true, detectedLanIp })}\n`,
+    );
+    captureStarted = false;
+    socket.close();
+    process.exit(0);
+  }
 
   runProxiedCurl(targetUrl);
   runProxiedCurl(`${targetUrl}&step=redacted`, [

@@ -45,14 +45,10 @@ authorized to test.
 
 Windows x64:
 
-- [Download App Network Debugger v0.1.0 (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.0/App-Network-Debugger_0.1.0_windows-x64-setup.exe)
-- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.0/App-Network-Debugger_0.1.0_windows-x64.msi)
-- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.0/SHA256SUMS.txt)
-- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.0)
+- [Download App Network Debugger v0.1.1 (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.1/App-Network-Debugger_0.1.1_windows-x64-setup.exe)
+- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.1/App-Network-Debugger_0.1.1_windows-x64.msi)
+- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.1/SHA256SUMS.txt)
+- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.1)
 
 The installer is not currently code-signed, so Windows SmartScreen may display
-an **Unknown publisher** warning. SHA-256 for the `.exe` installer:
-
-```text
-5b737481b23807b7701ee761106b996b5751f29e2bf5cd873641f1246d1c1de4
-```
+an **Unknown publisher** warning.

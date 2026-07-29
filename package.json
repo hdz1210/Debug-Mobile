@@ -1,7 +1,7 @@
 {
   "name": "app-network-debugger",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -22,6 +22,7 @@
     "test:python": "node scripts/python-tool.mjs -m unittest discover -s tests/python -v",
     "test:smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phase1-smoke.ps1",
     "test:ui-smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/app-ui-smoke.ps1",
+    "test:forced-exit": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/forced-exit-smoke.ps1",
     "release:prepare": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-release-sidecar.ps1",
     "preview": "vite preview",
     "tauri": "tauri"

@@ -5,19 +5,23 @@ use std::borrow::Cow;
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
+
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
 
 const BRIDGE_EVENT_NAME: &str = "bridge-event";
 const CAPTURE_STATUS_EVENT_NAME: &str = "capture-status";
 const BACKEND_WARNING_EVENT_NAME: &str = "backend-warning";
 const DEFAULT_BODY_LIMIT: u64 = 1_000_000;
 const MAX_BODY_LIMIT: u64 = 100_000_000;
+const PROXY_START_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -74,9 +78,27 @@ pub struct CaptureStatusSnapshot {
     pub message: Option<String>,
 }
 
+#[cfg(windows)]
+struct ProcessJob(isize);
+
+#[cfg(windows)]
+impl Drop for ProcessJob {
+    fn drop(&mut self) {
+        use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+
+        unsafe {
+            CloseHandle(self.0 as HANDLE);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+struct ProcessJob;
+
 struct CaptureRuntime {
     status: CaptureStatus,
     child: Option<Child>,
+    process_job: Option<ProcessJob>,
     pid: Option<u32>,
     config: CaptureConfig,
     message: Option<String>,
@@ -88,6 +110,7 @@ impl Default for CaptureRuntime {
         Self {
             status: CaptureStatus::Stopped,
             child: None,
+            process_job: None,
             pid: None,
             config: CaptureConfig::default(),
             message: None,
@@ -182,6 +205,15 @@ impl CaptureManager {
             self.mark_failed(&app, message.clone());
             message
         })?;
+        let process_job = match attach_kill_on_close_job(&child) {
+            Ok(process_job) => process_job,
+            Err(message) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                self.mark_failed(&app, message.clone());
+                return Err(message);
+            }
+        };
         let pid = child.id();
         let stdout = match child.stdout.take() {
             Some(stdout) => stdout,
@@ -204,6 +236,16 @@ impl CaptureManager {
             }
         };
 
+        spawn_stdout_reader(app.clone(), stdout);
+        spawn_stderr_reader(app.clone(), stderr);
+
+        if let Err(message) = wait_for_proxy_ready(&mut child, config.port, PROXY_START_TIMEOUT) {
+            let _ = child.kill();
+            let _ = child.wait();
+            self.mark_failed(&app, message.clone());
+            return Err(message);
+        }
+
         if let Err(error) = app.state::<SessionStore>().start_session() {
             let _ = child.kill();
             let _ = child.wait();
@@ -214,14 +256,13 @@ impl CaptureManager {
         let generation = {
             let mut runtime = self.lock_runtime();
             runtime.child = Some(child);
+            runtime.process_job = Some(process_job);
             runtime.pid = Some(pid);
             runtime.status = CaptureStatus::Running;
             runtime.message = None;
             runtime.generation
         };
 
-        spawn_stdout_reader(app.clone(), stdout);
-        spawn_stderr_reader(app.clone(), stderr);
         self.spawn_exit_monitor(app.clone(), generation);
         self.emit_status(&app);
 
@@ -229,14 +270,14 @@ impl CaptureManager {
     }
 
     pub fn stop(&self, app: Option<&AppHandle>) -> Result<CaptureStatusSnapshot, String> {
-        let child = {
+        let (child, process_job) = {
             let mut runtime = self.lock_runtime();
             if runtime.status == CaptureStatus::Stopped {
                 return Ok(snapshot_from_runtime(&runtime));
             }
             runtime.status = CaptureStatus::Stopping;
             runtime.message = None;
-            runtime.child.take()
+            (runtime.child.take(), runtime.process_job.take())
         };
 
         if let Some(app) = app {
@@ -255,6 +296,7 @@ impl CaptureManager {
         } else {
             Ok(())
         };
+        drop(process_job);
 
         let session_result = app.map_or(Ok(()), |app| {
             app.state::<SessionStore>().end_active_session()
@@ -300,6 +342,7 @@ impl CaptureManager {
             runtime.status = CaptureStatus::Failed;
             runtime.pid = None;
             runtime.child = None;
+            runtime.process_job = None;
             runtime.message = Some(message);
         }
         self.emit_status(app);
@@ -334,6 +377,7 @@ impl CaptureManager {
                     match child.try_wait() {
                         Ok(Some(exit_status)) => {
                             runtime.child = None;
+                            runtime.process_job = None;
                             runtime.pid = None;
                             if runtime.status == CaptureStatus::Stopping || exit_status.success() {
                                 runtime.status = CaptureStatus::Stopped;
@@ -348,6 +392,7 @@ impl CaptureManager {
                         Ok(None) => None,
                         Err(error) => {
                             runtime.child = None;
+                            runtime.process_job = None;
                             runtime.pid = None;
                             runtime.status = CaptureStatus::Failed;
                             runtime.message =
@@ -369,6 +414,39 @@ impl CaptureManager {
         self.runtime
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+fn wait_for_proxy_ready(child: &mut Child, port: u16, timeout: Duration) -> Result<(), String> {
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let deadline = Instant::now() + timeout;
+
+    loop {
+        match child.try_wait() {
+            Ok(Some(exit_status)) => {
+                return Err(format!(
+                    "mitmdump exited before the proxy was ready: {exit_status}"
+                ));
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Err(format!(
+                    "Cannot inspect mitmdump while waiting for startup: {error}"
+                ));
+            }
+        }
+
+        if TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_ok() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "mitmdump did not start listening on 127.0.0.1:{port} within {} seconds.",
+                timeout.as_secs()
+            ));
+        }
+
+        thread::sleep(Duration::from_millis(100));
     }
 }
 
@@ -571,6 +649,59 @@ fn find_on_path(executable_name: &str) -> Option<PathBuf> {
 }
 
 #[cfg(windows)]
+fn attach_kill_on_close_job(child: &Child) -> Result<ProcessJob, String> {
+    use std::ffi::c_void;
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+        SetInformationJobObject,
+    };
+
+    let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+    if handle.is_null() {
+        return Err(format!(
+            "Cannot create a Windows process job for mitmdump: {}",
+            io::Error::last_os_error()
+        ));
+    }
+    let process_job = ProcessJob(handle as isize);
+
+    let mut job_information: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
+    job_information.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    let configured = unsafe {
+        SetInformationJobObject(
+            handle,
+            JobObjectExtendedLimitInformation,
+            &job_information as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION as *const c_void,
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )
+    };
+    if configured == 0 {
+        return Err(format!(
+            "Cannot configure mitmdump process cleanup: {}",
+            io::Error::last_os_error()
+        ));
+    }
+
+    let assigned = unsafe { AssignProcessToJobObject(handle, child.as_raw_handle() as HANDLE) };
+    if assigned == 0 {
+        return Err(format!(
+            "Cannot attach mitmdump to the application lifecycle: {}",
+            io::Error::last_os_error()
+        ));
+    }
+
+    Ok(process_job)
+}
+
+#[cfg(not(windows))]
+fn attach_kill_on_close_job(_child: &Child) -> Result<ProcessJob, String> {
+    Ok(ProcessJob)
+}
+
+#[cfg(windows)]
 fn configure_hidden_process(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -622,6 +753,15 @@ mod tests {
         CaptureConfig, CaptureManager, CaptureStatus, DEFAULT_BODY_LIMIT, MAX_BODY_LIMIT,
         read_output_lines,
     };
+
+    #[cfg(windows)]
+    use super::{attach_kill_on_close_job, configure_hidden_process};
+    #[cfg(windows)]
+    use std::process::{Command, Stdio};
+    #[cfg(windows)]
+    use std::thread;
+    #[cfg(windows)]
+    use std::time::{Duration, Instant};
 
     #[test]
     fn default_config_is_local_and_valid() {
@@ -682,5 +822,39 @@ mod tests {
                 ("last".to_owned(), false),
             ]
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn process_job_terminates_child_when_guard_is_dropped() {
+        let mut command = Command::new("ping.exe");
+        command
+            .args(["-t", "127.0.0.1"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        configure_hidden_process(&mut command);
+
+        let mut child = command.spawn().expect("test child should start");
+        let process_job =
+            attach_kill_on_close_job(&child).expect("test child should join the process job");
+        drop(process_job);
+
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            if child
+                .try_wait()
+                .expect("test child status should be readable")
+                .is_some()
+            {
+                break;
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("dropping the process job did not terminate its child");
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
     }
 }
