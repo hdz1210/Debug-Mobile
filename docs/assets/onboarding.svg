@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title description">
+  <title id="title">Five-step mobile onboarding</title>
+  <desc id="description">Connect both devices to the same Wi-Fi, start capture, set the phone proxy, install the certificate, and inspect requests.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c121b"/>
+      <stop offset="1" stop-color="#111c2d"/>
+    </linearGradient>
+    <linearGradient id="step" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="300" rx="24" fill="url(#background)"/>
+  <text x="50" y="55" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="27" font-weight="700">Start capturing in five steps</text>
+  <text x="50" y="84" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="15">No Python or separate mitmproxy installation required.</text>
+
+  <path d="M155 153H1045" stroke="#26384f" stroke-width="4" stroke-linecap="round"/>
+
+  <g font-family="Segoe UI, Arial, sans-serif" text-anchor="middle">
+    <g transform="translate(155 153)">
+      <circle r="34" fill="url(#step)"/>
+      <text y="8" fill="#fff" font-size="23" font-weight="700">1</text>
+      <text y="69" fill="#f8fafc" font-size="17" font-weight="700">Same Wi-Fi</text>
+      <text y="94" fill="#94a3b8" font-size="13">Phone + computer</text>
+    </g>
+
+    <g transform="translate(377 153)">
+      <circle r="34" fill="url(#step)"/>
+      <text y="8" fill="#fff" font-size="23" font-weight="700">2</text>
+      <text y="69" fill="#f8fafc" font-size="17" font-weight="700">Start capture</text>
+      <text y="94" fill="#94a3b8" font-size="13">Select LAN devices</text>
+    </g>
+
+    <g transform="translate(600 153)">
+      <circle r="34" fill="url(#step)"/>
+      <text y="8" fill="#fff" font-size="23" font-weight="700">3</text>
+      <text y="69" fill="#f8fafc" font-size="17" font-weight="700">Set proxy</text>
+      <text y="94" fill="#94a3b8" font-size="13">Host IP + port 8080</text>
+    </g>
+
+    <g transform="translate(823 153)">
+      <circle r="34" fill="url(#step)"/>
+      <text y="8" fill="#fff" font-size="23" font-weight="700">4</text>
+      <text y="69" fill="#f8fafc" font-size="17" font-weight="700">Trust certificate</text>
+      <text y="94" fill="#94a3b8" font-size="13">Install from mitm.it</text>
+    </g>
+
+    <g transform="translate(1045 153)">
+      <circle r="34" fill="url(#step)"/>
+      <text y="8" fill="#fff" font-size="23" font-weight="700">5</text>
+      <text y="69" fill="#f8fafc" font-size="17" font-weight="700">Inspect traffic</text>
+      <text y="94" fill="#94a3b8" font-size="13">Open the target app</text>
+    </g>
+  </g>
+</svg>

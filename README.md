@@ -1,6 +1,25 @@
 # App Network Debugger
 
+Inspect HTTP, HTTPS, and WebSocket traffic from a mobile device in a desktop
+interface inspired by the Network panel in browser developer tools.
+
+<p align="center">
+  <img
+    src="./docs/assets/app-network-debugger.png"
+    alt="App Network Debugger capturing requests from a mobile device"
+    width="100%"
+  />
+</p>
+
 ## Benefits
+
+<p align="center">
+  <img
+    src="./docs/assets/capture-flow.svg"
+    alt="Traffic flows from the mobile device through App Network Debugger to the API server"
+    width="100%"
+  />
+</p>
 
 - Capture HTTP, HTTPS, and WebSocket requests from mobile applications.
 - Inspect URLs, methods, status codes, headers, queries, payloads, responses,
@@ -9,50 +28,45 @@
 - Save capture history and reopen previous sessions.
 - Redact sensitive headers and data fields before displaying them.
 - Keep captured data locally on the computer.
-- Open a persistent diagnostic log from the app when capture or networking
-  fails.
+- Open a persistent diagnostic log when capture or networking fails.
 - Use the packaged Windows application without installing Python or mitmproxy.
 
 ## Onboarding
 
+<p align="center">
+  <img
+    src="./docs/assets/onboarding.svg"
+    alt="Five-step onboarding: same Wi-Fi, start capture, set proxy, install certificate, inspect requests"
+    width="100%"
+  />
+</p>
+
 1. Connect the phone and computer to the same Wi-Fi network.
 2. Open App Network Debugger, select **LAN devices**, and click
    **Start capture**.
-3. Note the **Host / IP** and **Port** displayed in the desktop application.
-4. Open the current Wi-Fi network settings on the phone and select
-   **Proxy → Manual**.
-5. Enter:
-   - **Server/Host:** the local IP displayed in the desktop application.
-   - **Port:** `8080` by default.
-   - **Authentication:** off.
-6. On the phone, open `http://mitm.it` and install the mitmproxy certificate.
-7. On iPhone or iPad, open
-   **Settings → General → About → Certificate Trust Settings**, then enable
-   full trust for the mitmproxy certificate.
-8. Open the mobile application you want to inspect and use it normally.
-   Requests will appear in the desktop application; select one to inspect its
-   payload and response.
-9. When finished, click **Stop** and set the phone's Wi-Fi proxy back to
-   **Off**.
+3. On the phone, open the current Wi-Fi settings and set **Proxy** to
+   **Manual**. Enter the **Host / IP** displayed by the desktop app and port
+   `8080`. Leave authentication off.
+4. Open `http://mitm.it` on the phone and install the mitmproxy certificate.
+   On iPhone or iPad, also open **Settings → General → About → Certificate
+   Trust Settings** and enable full trust for the certificate.
+5. Open the mobile app you want to inspect. Select any captured request in the
+   desktop app to view its headers, payload, response, and timing.
 
-If the app reports an error, click **Logs** in the toolbar or **Open logs** in
-the error banner. The app opens `app-network-debugger.log` in Windows File
-Explorer. Review the file before sharing it because diagnostic errors can
-contain local paths, hosts, or request URLs.
+When finished, click **Stop** and set the phone's Wi-Fi proxy back to **Off**.
+After changing Wi-Fi networks, refresh the local IP in the desktop app and
+update the proxy server on the phone.
 
-After changing Wi-Fi networks, refresh the local IP in the desktop application
-and update the proxy server on the phone. Some applications ignore the system
-proxy or use certificate pinning and therefore cannot be captured. This project
-does not bypass certificate pinning.
-
-Only inspect devices and network traffic that you own or are explicitly
-authorized to test.
+> Some applications ignore the system proxy or use certificate pinning and
+> therefore cannot be captured. This project does not bypass certificate
+> pinning. Only inspect devices and traffic that you own or are explicitly
+> authorized to test.
 
 ## Installer
 
-Windows x64:
+### Windows x64
 
-- [Download App Network Debugger v0.1.2 (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.2/App-Network-Debugger_0.1.2_windows-x64-setup.exe)
+- **[Download the v0.1.2 installer (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.2/App-Network-Debugger_0.1.2_windows-x64-setup.exe)**
 - [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.2/App-Network-Debugger_0.1.2_windows-x64.msi)
 - [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.2/SHA256SUMS.txt)
 - [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.2)
