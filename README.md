@@ -15,7 +15,7 @@ interface inspired by the Network panel in browser developer tools.
 
 <p align="center">
   <img
-    src="./docs/assets/capture-flow.svg"
+    src="./docs/assets/capture-flow.png"
     alt="Traffic flows from the mobile device through App Network Debugger to the API server"
     width="100%"
   />
@@ -35,7 +35,7 @@ interface inspired by the Network panel in browser developer tools.
 
 <p align="center">
   <img
-    src="./docs/assets/onboarding.svg"
+    src="./docs/assets/onboarding.png"
     alt="Five-step onboarding: same Wi-Fi, start capture, set proxy, install certificate, inspect requests"
     width="100%"
   />
