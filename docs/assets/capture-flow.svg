@@ -30,7 +30,7 @@
 
   <g filter="url(#shadow)">
     <rect x="60" y="132" width="235" height="154" rx="20" fill="#151e2b" stroke="#2b3a4f"/>
-    <rect x="482" y="120" width="236" height="178" rx="22" fill="url(#primary)"/>
+    <rect x="440" y="120" width="320" height="178" rx="22" fill="url(#primary)"/>
     <rect x="905" y="132" width="235" height="154" rx="20" fill="#151e2b" stroke="#2b3a4f"/>
   </g>
 
@@ -43,13 +43,13 @@
   <text x="154" y="211" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="15">iOS or Android</text>
   <text x="154" y="237" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="15">HTTP · HTTPS · WS</text>
 
-  <g transform="translate(517 154)">
+  <g transform="translate(470 154)">
     <circle cx="30" cy="30" r="30" fill="#fff" opacity=".16"/>
     <path d="M16 30h28M30 16v28" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
   </g>
-  <text x="590" y="174" fill="#fff" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">App Network</text>
-  <text x="590" y="201" fill="#fff" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">Debugger</text>
-  <text x="518" y="250" fill="#e7f0ff" font-family="Segoe UI, Arial, sans-serif" font-size="15">Capture · inspect · diagnose</text>
+  <text x="545" y="174" fill="#fff" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">App Network</text>
+  <text x="545" y="201" fill="#fff" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">Debugger</text>
+  <text x="480" y="250" fill="#e7f0ff" font-family="Segoe UI, Arial, sans-serif" font-size="15">Capture · inspect · diagnose</text>
 
   <g transform="translate(934 170)" fill="none" stroke="#5aa7ff" stroke-width="4">
     <ellipse cx="35" cy="10" rx="35" ry="10"/>
@@ -59,11 +59,11 @@
   <text x="1022" y="211" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="15">Request payload</text>
   <text x="1022" y="237" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="15">Response body</text>
 
-  <path d="M315 209H455" stroke="#5aa7ff" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
-  <path d="M738 209H878" stroke="#5aa7ff" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
-  <text x="335" y="190" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="13">Wi-Fi proxy</text>
-  <text x="754" y="190" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="13">Forward traffic</text>
+  <path d="M315 209H415" stroke="#5aa7ff" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
+  <path d="M785 209H878" stroke="#5aa7ff" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
+  <text x="323" y="190" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="13">Wi-Fi proxy</text>
+  <text x="787" y="190" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="13">Forward traffic</text>
 
-  <path d="M878 247H738" stroke="#34d399" stroke-width="3" stroke-linecap="round" marker-end="url(#response-arrow)" opacity=".9"/>
-  <text x="766" y="270" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="13">Response</text>
+  <path d="M878 247H785" stroke="#34d399" stroke-width="3" stroke-linecap="round" marker-end="url(#response-arrow)" opacity=".9"/>
+  <text x="800" y="270" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="13">Response</text>
 </svg>
