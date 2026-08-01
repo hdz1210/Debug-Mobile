@@ -13,6 +13,7 @@ $serverOutput = Join-Path $smokeDirectory "server.stdout.log"
 $serverError = Join-Path $smokeDirectory "server.stderr.log"
 $applicationOutput = Join-Path $smokeDirectory "application.stdout.log"
 $applicationError = Join-Path $smokeDirectory "application.stderr.log"
+$proxyPort = 18080
 
 if (-not (Test-Path -LiteralPath $applicationPath -PathType Leaf)) {
     throw "Build the debug application before running the Phase 2 UI smoke test."
@@ -28,9 +29,11 @@ $server = Start-Process `
     -WindowStyle Hidden
 
 $previousBrowserArguments = $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+$previousWebViewDataFolder = $env:WEBVIEW2_USER_DATA_FOLDER
 $previousAppData = $env:APPDATA
 $previousLocalAppData = $env:LOCALAPPDATA
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=19333"
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=19333 --remote-allow-origins=*"
+$env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $smokeDirectory "webview2"
 $env:APPDATA = $smokeAppData
 $env:LOCALAPPDATA = $smokeLocalAppData
 
@@ -49,7 +52,7 @@ try {
         node `
             (Join-Path $PSScriptRoot "cdp-ui-smoke.mjs") `
             "19333" `
-            "8080" `
+            "$proxyPort" `
             "http://127.0.0.1:19081/README.md?source=ui-smoke"
         if ($LASTEXITCODE -ne 0) {
             throw "UI smoke test failed with exit code $LASTEXITCODE"
@@ -74,6 +77,7 @@ try {
 }
 finally {
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousBrowserArguments
+    $env:WEBVIEW2_USER_DATA_FOLDER = $previousWebViewDataFolder
     $env:APPDATA = $previousAppData
     $env:LOCALAPPDATA = $previousLocalAppData
     if (-not $server.HasExited) {

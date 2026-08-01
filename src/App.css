@@ -8,6 +8,12 @@
   text-rendering: optimizeLegibility;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -33,13 +39,17 @@ select:focus-visible {
 }
 
 .network-app {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: #0d1117;
 }
 
 .toolbar {
+  flex: 0 0 auto;
   min-height: 5.25rem;
   display: grid;
   grid-template-columns: auto auto auto minmax(14rem, 1fr);
@@ -188,6 +198,7 @@ select:focus-visible {
 }
 
 .lan-proxy-banner {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(15rem, 1.25fr) minmax(8rem, 0.65fr) 5rem auto;
   align-items: center;
@@ -269,6 +280,7 @@ select:focus-visible {
 }
 
 .notice {
+  flex: 0 0 auto;
   padding: 0.58rem 1rem;
   border-bottom: 1px solid;
   font-size: 0.78rem;
@@ -308,6 +320,7 @@ select:focus-visible {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(35rem, 1.6fr) minmax(20rem, 1fr);
+  overflow: hidden;
 }
 
 .request-list,
@@ -318,6 +331,9 @@ select:focus-visible {
 }
 
 .request-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-right: 1px solid #30363d;
 }
 
@@ -337,8 +353,10 @@ select:focus-visible {
 }
 
 .table-scroll {
-  height: calc(100% - 3.55rem);
+  min-height: 0;
+  flex: 1;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 table {
@@ -444,7 +462,7 @@ tbody tr.selected td:first-child {
 .request-details {
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .empty-details {
@@ -545,6 +563,7 @@ tbody tr.selected td:first-child {
   min-height: 0;
   flex: 1;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .detail-stack {

@@ -150,9 +150,17 @@ try {
   await evaluate(
     `(() => {
       const select = document.querySelector(".proxy-settings select");
-      if (!select) return false;
+      const portInput = document.querySelector(".proxy-settings .port-input");
+      if (!select || !portInput) return false;
       select.value = "lan";
       select.dispatchEvent(new Event("change", { bubbles: true }));
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      valueSetter?.call(portInput, ${JSON.stringify(proxyPort)});
+      portInput.dispatchEvent(new Event("input", { bubbles: true }));
+      portInput.dispatchEvent(new Event("change", { bubbles: true }));
       return true;
     })()`,
   );
@@ -200,9 +208,22 @@ try {
   ]);
   runProxiedCurl(`${targetUrl}&step=after-redacted`);
 
+  for (let index = 0; index < 40; index += 1) {
+    runProxiedCurl(`${targetUrl}&scroll=${index}`);
+  }
+
   await waitFor(
-    "document.querySelectorAll('tbody tr[data-state]').length >= 3",
-    "three captured request rows, including one after a redacted header",
+    "document.querySelectorAll('tbody tr[data-state]').length >= 43",
+    "enough captured request rows to exercise table scrolling",
+  );
+  await waitFor(
+    `(() => {
+      const scroller = document.querySelector(".table-scroll");
+      if (!scroller || scroller.scrollHeight <= scroller.clientHeight) return false;
+      scroller.scrollTop = scroller.scrollHeight;
+      return scroller.scrollTop > 0;
+    })()`,
+    "the network request table to scroll vertically",
   );
   await evaluate(
     `(() => {
@@ -236,6 +257,15 @@ try {
   await waitFor(
     "document.querySelector('.body-content')?.textContent?.includes('App Network Debugger') === true",
     "the captured response body",
+  );
+  await waitFor(
+    `(() => {
+      const scroller = document.querySelector(".detail-content");
+      if (!scroller || scroller.scrollHeight <= scroller.clientHeight) return false;
+      scroller.scrollTop = scroller.scrollHeight;
+      return scroller.scrollTop > 0;
+    })()`,
+    "the request detail content to scroll vertically",
   );
 
   const rowCount = await evaluate(
