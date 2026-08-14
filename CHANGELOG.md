@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4] - 2026-08-15
+
+### Added
+
+- Detect and tag supported Firebase Analytics, Google Analytics, App Check,
+  Installations, Crashlytics, and Firebase logging requests while retaining
+  the original request in the network inspector.
+- Decode supported Firebase native batches, GA collect and batch requests,
+  and GA4 Measurement Protocol payloads into a dedicated **Analytics** tab.
+- Display analytics events, parameters, user properties, items, consent,
+  timestamps, parser confidence, and actionable decoding warnings.
+- Search captured and historical traffic by analytics provider, service,
+  protocol, tags, application metadata, and event names.
+
+### Changed
+
+- Preserve native analytics payload bytes for reliable decoding and surface
+  unsupported, malformed, or truncated schemas without hiding raw traffic.
+- Persist decoded analytics metadata with capture history.
+
 ## [0.1.3] - 2026-08-15
 
 ### Added

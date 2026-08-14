@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode
 
+from analyzers import analyze_request, is_firebase_native_url
 from mitmproxy import ctx, http
 
 PREFIX = "APPDBG_EVENT:"
@@ -214,14 +215,17 @@ def _redact_text(text: str, content_type: str) -> str:
         )
 
     if media_type == "application/x-www-form-urlencoded":
-        entries = [
-            (
-                key,
-                REDACTED_VALUE if key.lower() in _SENSITIVE_KEYS else value,
-            )
-            for key, value in parse_qsl(text, keep_blank_values=True)
-        ]
-        return urlencode(entries)
+        redacted_lines: list[str] = []
+        for line in text.split("\n"):
+            entries = [
+                (
+                    key,
+                    REDACTED_VALUE if key.lower() in _SENSITIVE_KEYS else value,
+                )
+                for key, value in parse_qsl(line, keep_blank_values=True)
+            ]
+            redacted_lines.append(urlencode(entries))
+        return "\n".join(redacted_lines)
 
     return text
 
@@ -243,8 +247,10 @@ def serialize_body(
     should_redact = (
         _configured_redaction() if redact_sensitive is None else redact_sensitive
     )
+    request_url = getattr(message, "pretty_url", "")
+    force_base64 = bool(request_url) and is_firebase_native_url(request_url)
 
-    if _is_textual(content_type):
+    if not force_base64 and _is_textual(content_type):
         try:
             text = content.decode(_charset(content_type), errors="replace")
         except LookupError:
@@ -299,14 +305,29 @@ def requestheaders(flow: http.HTTPFlow) -> None:
 def request(flow: http.HTTPFlow) -> None:
     if not _flow_is_captured(flow):
         return
-    emit(
-        {
-            "event": "request_completed",
-            "flowId": flow.id,
-            "body": serialize_body(flow.request),
-            "endedAt": flow.request.timestamp_end,
-        }
+    captured_request = flow.request
+    content = (
+        _decoded_content(captured_request, captured_request.raw_content)
+        if captured_request.raw_content is not None
+        else b""
     )
+    body_limit = _configured_body_limit()
+    analysis_content = content[:body_limit]
+    analysis = analyze_request(
+        captured_request.pretty_url,
+        analysis_content,
+        redact_sensitive=_configured_redaction(),
+        content_truncated=len(content) > body_limit,
+    )
+    payload = {
+        "event": "request_completed",
+        "flowId": flow.id,
+        "body": serialize_body(captured_request, body_limit=body_limit),
+        "endedAt": captured_request.timestamp_end,
+    }
+    if analysis is not None:
+        payload["analysis"] = analysis
+    emit(payload)
 
 
 def responseheaders(flow: http.HTTPFlow) -> None:

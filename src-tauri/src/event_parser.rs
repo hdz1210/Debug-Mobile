@@ -1,10 +1,62 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 pub const EVENT_PREFIX: &str = "APPDBG_EVENT:";
 
 pub type HeaderEntry = [String; 2];
+pub type AnalysisObject = Map<String, Value>;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowAnalysisEvent {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_micros: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    pub parameters: AnalysisObject,
+    pub items: Vec<AnalysisObject>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowAnalysisBundle {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measurement_id: Option<String>,
+    pub user_properties: AnalysisObject,
+    pub consent: AnalysisObject,
+    pub events: Vec<FlowAnalysisEvent>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FlowAnalysis {
+    pub provider_id: String,
+    pub provider_label: String,
+    pub service_id: String,
+    pub service_label: String,
+    pub protocol: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    pub confidence: f64,
+    pub status: String,
+    pub parser_version: String,
+    pub tags: Vec<String>,
+    pub bundles: Vec<FlowAnalysisBundle>,
+    pub warnings: Vec<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -51,6 +103,8 @@ pub enum BridgeEvent {
         flow_id: String,
         body: Option<CapturedBody>,
         ended_at: Option<f64>,
+        #[serde(default)]
+        analysis: Option<FlowAnalysis>,
     },
     #[serde(rename_all = "camelCase")]
     ResponseStarted {
@@ -227,6 +281,48 @@ mod tests {
             } => {
                 assert_eq!(body.format, BodyFormat::Base64);
                 assert_eq!(body.size, 3);
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_old_request_completed_event_without_analysis() {
+        let event = parse_event_line(concat!(
+            "APPDBG_EVENT:",
+            r#"{"event":"request_completed","flowId":"legacy-flow","body":null,"endedAt":2.0}"#
+        ))
+        .expect("legacy event should parse")
+        .expect("legacy event should not be ignored");
+
+        assert!(matches!(
+            event,
+            BridgeEvent::RequestCompleted { analysis: None, .. }
+        ));
+    }
+
+    #[test]
+    fn parses_typed_analytics_analysis() {
+        let event = parse_event_line(concat!(
+            "APPDBG_EVENT:",
+            r#"{"event":"request_completed","flowId":"analytics-flow","body":null,"endedAt":2.0,"analysis":{"providerId":"firebase","providerLabel":"Firebase","serviceId":"firebase-analytics","serviceLabel":"Firebase Analytics","protocol":"protobuf","platform":"ios","confidence":0.99,"status":"decoded","parserVersion":"1","tags":["analytics","firebase"],"bundles":[{"appId":"com.example.app","appName":"Example","appVersion":"1.2.3","platform":"ios","measurementId":"G-TEST","userProperties":{"plan":"pro"},"consent":{"analyticsStorage":"granted"},"events":[{"name":"view_item","timestampMicros":1234567,"origin":"app","parameters":{"currency":"VND","value":34990000},"items":[{"itemId":"59258","itemName":"iPhone"}]}]}],"warnings":[]}}"#
+        ))
+        .expect("analytics event should parse")
+        .expect("analytics event should not be ignored");
+
+        match event {
+            BridgeEvent::RequestCompleted {
+                analysis: Some(analysis),
+                ..
+            } => {
+                assert_eq!(analysis.service_id, "firebase-analytics");
+                assert_eq!(
+                    analysis.bundles[0].app_id.as_deref(),
+                    Some("com.example.app")
+                );
+                assert_eq!(analysis.bundles[0].events[0].name, "view_item");
+                assert_eq!(analysis.bundles[0].events[0].parameters["currency"], "VND");
+                assert_eq!(analysis.bundles[0].events[0].items[0]["itemId"], "59258");
             }
             other => panic!("unexpected event: {other:?}"),
         }

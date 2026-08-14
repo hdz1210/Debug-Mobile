@@ -86,6 +86,7 @@ function applyEvent(flow: NetworkFlow, event: BridgeEvent): NetworkFlow {
         ...flow,
         requestBody: event.body,
         requestEndedAt: event.endedAt,
+        analysis: event.analysis ?? flow.analysis,
         state: flow.state === "failed" ? "failed" : "waiting",
       };
     case "response_started":

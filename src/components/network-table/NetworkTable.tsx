@@ -1,4 +1,5 @@
 import type { NetworkFlow } from "../../types/events";
+import { analysisLabel } from "../analytics/analytics-format";
 
 type NetworkTableProps = {
   flows: NetworkFlow[];
@@ -77,7 +78,18 @@ export function NetworkTable({
                 >
                   <td className="method">{flow.method ?? "—"}</td>
                   <td className="request-name" title={flow.url}>
-                    {flow.path ?? flow.url ?? flow.id}
+                    <div className="request-name-content">
+                      <span>{flow.path ?? flow.url ?? flow.id}</span>
+                      {flow.analysis ? (
+                        <span
+                          className="service-badge"
+                          data-service={flow.analysis.serviceId}
+                          title={`${analysisLabel(flow.analysis)} · ${flow.analysis.status}`}
+                        >
+                          {analysisLabel(flow.analysis)}
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td>{flow.host ?? "—"}</td>
                   <td>

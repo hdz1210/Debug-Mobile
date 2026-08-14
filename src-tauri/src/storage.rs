@@ -1,5 +1,7 @@
 use crate::diagnostics;
-use crate::event_parser::{BodyFormat, BridgeEvent, CapturedBody, HeaderEntry, WebSocketDirection};
+use crate::event_parser::{
+    BodyFormat, BridgeEvent, CapturedBody, FlowAnalysis, HeaderEntry, WebSocketDirection,
+};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -94,6 +96,7 @@ impl SessionStore {
                     response_ended_at REAL,
                     duration_ms REAL,
                     error TEXT,
+                    analysis_json TEXT,
                     state TEXT NOT NULL DEFAULT 'requesting',
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 );
@@ -117,6 +120,7 @@ impl SessionStore {
                 ",
             )
             .map_err(|error| format!("Cannot initialize session database: {error}"))?;
+        ensure_analysis_column(&connection)?;
         connection
             .execute(
                 "UPDATE sessions SET ended_at=?1 WHERE ended_at IS NULL",
@@ -209,13 +213,19 @@ impl SessionStore {
                 flow_id,
                 body,
                 ended_at,
+                analysis,
             } => {
                 let stored = store_body(&inner.body_root, session_id, flow_id, "request", body)?;
+                let analysis_json = analysis
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()
+                    .map_err(|error| format!("Cannot serialize flow analysis: {error}"))?;
                 inner.connection.execute(
                     "UPDATE flows SET request_body_path=?1, request_body_format=?2,
                      request_body_content_type=?3, request_body_size=?4,
-                     request_body_truncated=?5, request_ended_at=?6, state='waiting'
-                     WHERE id=?7",
+                     request_body_truncated=?5, request_ended_at=?6, analysis_json=?7,
+                     state='waiting' WHERE id=?8",
                     params![
                         stored.path,
                         stored.format,
@@ -223,6 +233,7 @@ impl SessionStore {
                         stored.size,
                         stored.truncated,
                         ended_at,
+                        analysis_json,
                         flow_id
                     ],
                 )
@@ -385,7 +396,7 @@ impl SessionStore {
                         response_body_content_type, response_body_size,
                         response_body_truncated, request_started_at,
                         request_ended_at, response_started_at, response_ended_at,
-                        duration_ms, error
+                        duration_ms, error, analysis_json
                  FROM flows WHERE session_id=?1
                  ORDER BY COALESCE(request_started_at, 0), rowid",
             )
@@ -526,6 +537,24 @@ fn ensure_flow(connection: &Connection, session_id: &str, flow_id: &str) -> Resu
     Ok(())
 }
 
+fn ensure_analysis_column(connection: &Connection) -> Result<(), String> {
+    let has_analysis_column = connection
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM pragma_table_info('flows') WHERE name='analysis_json'
+             )",
+            [],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(|error| format!("Cannot inspect session database schema: {error}"))?;
+    if !has_analysis_column {
+        connection
+            .execute("ALTER TABLE flows ADD COLUMN analysis_json TEXT", [])
+            .map_err(|error| format!("Cannot migrate flow analysis storage: {error}"))?;
+    }
+    Ok(())
+}
+
 struct FlowRecord {
     id: String,
     method: Option<String>,
@@ -546,6 +575,7 @@ struct FlowRecord {
     response_ended_at: Option<f64>,
     duration_ms: Option<f64>,
     error: Option<String>,
+    analysis_json: Option<String>,
 }
 
 struct BodyRecord {
@@ -590,10 +620,12 @@ impl FlowRecord {
             response_ended_at: row.get(24)?,
             duration_ms: row.get(25)?,
             error: row.get(26)?,
+            analysis_json: row.get(27)?,
         })
     }
 
     fn to_events(&self, body_root: &Path) -> Result<Vec<BridgeEvent>, String> {
+        let analysis = parse_analysis(self.analysis_json.as_deref())?;
         let mut events = Vec::new();
         if let Some(started_at) = self.request_started_at {
             events.push(BridgeEvent::RequestStarted {
@@ -608,11 +640,13 @@ impl FlowRecord {
                 started_at,
             });
         }
-        if self.request_ended_at.is_some() || self.request_body.path.is_some() {
+        if self.request_ended_at.is_some() || self.request_body.path.is_some() || analysis.is_some()
+        {
             events.push(BridgeEvent::RequestCompleted {
                 flow_id: self.id.clone(),
                 body: load_body(body_root, &self.request_body)?,
                 ended_at: self.request_ended_at,
+                analysis,
             });
         }
         if let (Some(status_code), Some(started_at)) = (self.status_code, self.response_started_at)
@@ -644,6 +678,13 @@ impl FlowRecord {
         }
         Ok(events)
     }
+}
+
+fn parse_analysis(value: Option<&str>) -> Result<Option<FlowAnalysis>, String> {
+    value
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(|error| format!("Cannot decode stored flow analysis: {error}"))
 }
 
 fn load_body(body_root: &Path, body: &BodyRecord) -> Result<Option<CapturedBody>, String> {
@@ -857,9 +898,43 @@ fn log_storage_command_error<T>(app: &AppHandle, operation: &str, result: &Resul
 #[cfg(test)]
 mod tests {
     use super::{SessionStore, parse_body_format, safe_file_component, validate_session_id};
-    use crate::event_parser::{BodyFormat, BridgeEvent, CapturedBody};
+    use crate::event_parser::{BodyFormat, BridgeEvent, CapturedBody, FlowAnalysis};
+    use rusqlite::{Connection, params};
+    use serde_json::json;
     use tempfile::tempdir;
     use uuid::Uuid;
+
+    fn sample_analysis() -> FlowAnalysis {
+        serde_json::from_value(json!({
+            "providerId": "firebase",
+            "providerLabel": "Firebase",
+            "serviceId": "firebase-analytics",
+            "serviceLabel": "Firebase Analytics",
+            "protocol": "protobuf",
+            "platform": "ios",
+            "confidence": 0.98,
+            "status": "decoded",
+            "parserVersion": "1",
+            "tags": ["analytics", "firebase"],
+            "bundles": [{
+                "appId": "com.example.app",
+                "appName": "Example",
+                "appVersion": "1.0.0",
+                "platform": "ios",
+                "userProperties": {"plan": "pro"},
+                "consent": {"analyticsStorage": "granted"},
+                "events": [{
+                    "name": "view_item",
+                    "timestampMicros": 1234567,
+                    "origin": "app",
+                    "parameters": {"currency": "VND"},
+                    "items": [{"itemId": "59258"}]
+                }]
+            }],
+            "warnings": []
+        }))
+        .expect("sample analysis should be valid")
+    }
 
     #[test]
     fn sanitizes_untrusted_flow_ids_for_file_names() {
@@ -908,6 +983,7 @@ mod tests {
                     truncated: false,
                 }),
                 ended_at: Some(100.1),
+                analysis: Some(sample_analysis()),
             })
             .expect("request body should persist");
         store.end_active_session().expect("session should end");
@@ -925,8 +1001,11 @@ mod tests {
             &events[1],
             BridgeEvent::RequestCompleted {
                 body: Some(body),
+                analysis: Some(analysis),
                 ..
             } if body.data.contains("••••••••")
+                && analysis.service_id == "firebase-analytics"
+                && analysis.bundles[0].events[0].name == "view_item"
         ));
 
         store
@@ -946,5 +1025,81 @@ mod tests {
                 .expect("sessions should list")
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn migrates_an_existing_database_with_analysis_storage() {
+        let directory = tempdir().expect("temporary directory should be created");
+        let database_path = directory.path().join("history.sqlite3");
+        let connection = Connection::open(&database_path).expect("legacy database should open");
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE sessions (
+                    id TEXT PRIMARY KEY,
+                    started_at REAL NOT NULL,
+                    ended_at REAL,
+                    name TEXT
+                );
+                CREATE TABLE flows (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    request_started_at REAL,
+                    state TEXT NOT NULL DEFAULT 'requesting'
+                );
+                ",
+            )
+            .expect("legacy schema should be created");
+        drop(connection);
+
+        let store = SessionStore::initialize_at(directory.path())
+            .expect("legacy database should migrate during initialization");
+        let inner = store.lock_inner();
+        let analysis_columns: i64 = inner
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('flows') WHERE name='analysis_json'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("migrated schema should be readable");
+        assert_eq!(analysis_columns, 1);
+    }
+
+    #[test]
+    fn rejects_malformed_stored_analysis_without_panicking() {
+        let directory = tempdir().expect("temporary directory should be created");
+        let store = SessionStore::initialize_at(directory.path()).expect("store should initialize");
+        let session_id = store.start_session().expect("session should start");
+        let flow_id = "malformed-analysis";
+
+        store
+            .persist_event(&BridgeEvent::RequestStarted {
+                flow_id: flow_id.to_owned(),
+                method: "POST".to_owned(),
+                url: "https://app-measurement.com/a".to_owned(),
+                host: "app-measurement.com".to_owned(),
+                port: 443,
+                scheme: "https".to_owned(),
+                http_version: "HTTP/2.0".to_owned(),
+                headers: Vec::new(),
+                started_at: 100.0,
+            })
+            .expect("request should persist");
+        {
+            let inner = store.lock_inner();
+            inner
+                .connection
+                .execute(
+                    "UPDATE flows SET request_ended_at=?1, analysis_json=?2 WHERE id=?3",
+                    params![100.1, r#"{"providerId":3}"#, flow_id],
+                )
+                .expect("malformed analysis fixture should be stored");
+        }
+
+        let error = store
+            .load_session_events(&session_id)
+            .expect_err("malformed stored analysis must be rejected");
+        assert!(error.contains("Cannot decode stored flow analysis"));
     }
 }
