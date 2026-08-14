@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-08-15
+
+### Added
+
+- Pause and resume capture without stopping proxy forwarding, so configured
+  mobile devices retain Internet access.
+- A certificate setup panel with a local QR code, SHA-256 fingerprint,
+  creation time, certificate file action, and explicit trust acknowledgement.
+- Detection and a persistent warning when the per-installation CA changes.
+
+### Changed
+
+- Store mitmproxy CA material in a dedicated persistent certificate directory.
+- Copy and preserve an existing CA from the previous runtime directory so
+  upgrades and rollbacks do not require reinstalling the phone certificate.
+
 ## [0.1.2] - 2026-07-30
 
 ### Added

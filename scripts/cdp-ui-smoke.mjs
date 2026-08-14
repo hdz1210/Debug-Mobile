@@ -192,6 +192,19 @@ try {
   );
   captureStarted = true;
 
+  await evaluate(clickButtonExpression("Certificate"));
+  await waitFor(
+    `document.querySelector(".certificate-panel") !== null &&
+      document.querySelector(".certificate-details")?.textContent?.includes("SHA-256") === true &&
+      document.querySelector(".certificate-qr img") !== null`,
+    "the certificate setup panel with fingerprint and QR code",
+  );
+  await evaluate(clickButtonExpression("Close"));
+  await waitFor(
+    "document.querySelector('.certificate-panel') === null",
+    "the certificate setup panel to close",
+  );
+
   if (mode === "start-only") {
     process.stdout.write(
       `${JSON.stringify({ captureStarted: true, detectedLanIp, diagnosticLog })}\n`,
@@ -277,6 +290,31 @@ try {
       .find((value) => value?.includes("README.md"))`,
   );
 
+  await evaluate(clickButtonExpression("Pause capture"));
+  await waitFor(
+    "document.querySelector('.status-dot')?.dataset.status === 'paused'",
+    "capture to pause while the proxy stays online",
+  );
+  runProxiedCurl(`${targetUrl}&step=paused-forwarding`);
+  await delay(500);
+  const pausedRowCount = await evaluate(
+    "document.querySelectorAll('tbody tr[data-state]').length",
+  );
+  if (pausedRowCount !== rowCount) {
+    throw new Error("A request was recorded while capture was paused.");
+  }
+
+  await evaluate(clickButtonExpression("Resume capture"));
+  await waitFor(
+    "document.querySelector('.status-dot')?.dataset.status === 'running'",
+    "capture to resume",
+  );
+  runProxiedCurl(`${targetUrl}&step=after-resume`);
+  await waitFor(
+    `document.querySelectorAll('tbody tr[data-state]').length > ${rowCount}`,
+    "a request to be recorded after capture resumes",
+  );
+
   await evaluate(clickButtonExpression("Stop"));
   await waitFor(
     "document.querySelector('.status-dot')?.dataset.status === 'stopped'",
@@ -310,6 +348,8 @@ try {
       capturedRows: rowCount,
       selectedUrl,
       verifiedTabs: ["overview", "headers", "query", "response"],
+      certificateSetupVerified: true,
+      pauseForwardingVerified: pausedRowCount === rowCount,
       encodingRecoveryVerified: rowCount >= 3,
       captureStopped: true,
       historyReloaded: true,

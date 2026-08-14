@@ -1,3 +1,4 @@
+use crate::certificate;
 use crate::diagnostics;
 use crate::event_parser::parse_event_line;
 use crate::storage::SessionStore;
@@ -30,8 +31,29 @@ pub enum CaptureStatus {
     Stopped,
     Starting,
     Running,
+    Pausing,
+    Paused,
+    Resuming,
     Stopping,
     Failed,
+}
+
+impl CaptureStatus {
+    fn proxy_is_active(self) -> bool {
+        matches!(
+            self,
+            Self::Starting
+                | Self::Running
+                | Self::Pausing
+                | Self::Paused
+                | Self::Resuming
+                | Self::Stopping
+        )
+    }
+
+    fn is_recording(self) -> bool {
+        self == Self::Running
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,10 +172,7 @@ impl CaptureManager {
 
         {
             let mut runtime = self.lock_runtime();
-            if matches!(
-                runtime.status,
-                CaptureStatus::Starting | CaptureStatus::Running | CaptureStatus::Stopping
-            ) {
+            if runtime.status.proxy_is_active() {
                 let message = "Capture is already active or changing state.".to_owned();
                 diagnostics::write_warn(&app, "capture", &message);
                 return Err(message);
@@ -189,14 +208,15 @@ impl CaptureManager {
                 bridge_path.display()
             ),
         );
-        let runtime_directory = app_runtime_directory(&app).inspect_err(|message| {
+        let conf_directory =
+            certificate::prepare_certificate_directory(&app).inspect_err(|message| {
+                self.mark_failed(&app, message.clone());
+            })?;
+        let capture_state_path = capture_state_path(&app).inspect_err(|message| {
             self.mark_failed(&app, message.clone());
         })?;
-        let conf_directory = runtime_directory.join("mitmproxy");
-        fs::create_dir_all(&conf_directory).map_err(|error| {
-            let message = format!("Cannot create certificate directory: {error}");
+        write_capture_state(&capture_state_path, true).inspect_err(|message| {
             self.mark_failed(&app, message.clone());
-            message
         })?;
 
         let mut command = Command::new(executable);
@@ -211,6 +231,11 @@ impl CaptureManager {
             .arg(format!("appdbg_body_limit={}", config.body_limit))
             .arg("--set")
             .arg("appdbg_redact_sensitive=true")
+            .arg("--set")
+            .arg(format!(
+                "appdbg_capture_state_file={}",
+                capture_state_path.display()
+            ))
             .arg("--set")
             .arg("termlog_verbosity=error")
             .arg("-s")
@@ -300,6 +325,82 @@ impl CaptureManager {
         self.emit_status(&app);
         diagnostics::write_info(&app, "capture", &format!("Capture is running; pid={pid}."));
 
+        Ok(self.snapshot())
+    }
+
+    pub fn pause(&self, app: &AppHandle) -> Result<CaptureStatusSnapshot, String> {
+        diagnostics::write_info(
+            app,
+            "capture",
+            "Pause requested; proxy will keep forwarding.",
+        );
+        {
+            let mut runtime = self.lock_runtime();
+            if runtime.status != CaptureStatus::Running {
+                return Err("Capture can only be paused while it is running.".to_owned());
+            }
+            runtime.status = CaptureStatus::Pausing;
+            runtime.message = None;
+        }
+        self.emit_status(app);
+
+        let result = capture_state_path(app).and_then(|path| write_capture_state(&path, false));
+        let mut runtime = self.lock_runtime();
+        match result {
+            Ok(()) => {
+                runtime.status = CaptureStatus::Paused;
+                runtime.message = None;
+                diagnostics::write_info(
+                    app,
+                    "capture",
+                    "Capture paused; proxy forwarding remains active.",
+                );
+            }
+            Err(message) => {
+                runtime.status = CaptureStatus::Running;
+                runtime.message = Some(message.clone());
+                diagnostics::write_error(app, "capture", &message);
+                drop(runtime);
+                self.emit_status(app);
+                return Err(message);
+            }
+        }
+        drop(runtime);
+        self.emit_status(app);
+        Ok(self.snapshot())
+    }
+
+    pub fn resume(&self, app: &AppHandle) -> Result<CaptureStatusSnapshot, String> {
+        diagnostics::write_info(app, "capture", "Resume requested.");
+        {
+            let mut runtime = self.lock_runtime();
+            if runtime.status != CaptureStatus::Paused {
+                return Err("Capture can only be resumed while it is paused.".to_owned());
+            }
+            runtime.status = CaptureStatus::Resuming;
+            runtime.message = None;
+        }
+        self.emit_status(app);
+
+        let result = capture_state_path(app).and_then(|path| write_capture_state(&path, true));
+        let mut runtime = self.lock_runtime();
+        match result {
+            Ok(()) => {
+                runtime.status = CaptureStatus::Running;
+                runtime.message = None;
+                diagnostics::write_info(app, "capture", "Capture resumed.");
+            }
+            Err(message) => {
+                runtime.status = CaptureStatus::Paused;
+                runtime.message = Some(message.clone());
+                diagnostics::write_error(app, "capture", &message);
+                drop(runtime);
+                self.emit_status(app);
+                return Err(message);
+            }
+        }
+        drop(runtime);
+        self.emit_status(app);
         Ok(self.snapshot())
     }
 
@@ -396,6 +497,10 @@ impl CaptureManager {
 
     fn emit_status(&self, app: &AppHandle) {
         let _ = app.emit(CAPTURE_STATUS_EVENT_NAME, self.snapshot());
+    }
+
+    fn is_recording(&self) -> bool {
+        self.lock_runtime().status.is_recording()
     }
 
     fn spawn_exit_monitor(&self, app: AppHandle, generation: u64) {
@@ -532,6 +637,10 @@ fn spawn_stdout_reader(app: AppHandle, stdout: impl std::io::Read + Send + 'stat
                 );
             }
 
+            if !app.state::<CaptureManager>().is_recording() {
+                return;
+            }
+
             match parse_event_line(line) {
                 Ok(Some(event)) => {
                     if let Err(error) = app.state::<SessionStore>().persist_event(&event) {
@@ -619,6 +728,15 @@ fn app_runtime_directory(app: &AppHandle) -> Result<PathBuf, String> {
     fs::create_dir_all(&path)
         .map_err(|error| format!("Cannot create runtime directory: {error}"))?;
     Ok(path)
+}
+
+fn capture_state_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_runtime_directory(app)?.join("capture-state.txt"))
+}
+
+fn write_capture_state(path: &Path, enabled: bool) -> Result<(), String> {
+    fs::write(path, if enabled { "enabled\n" } else { "paused\n" })
+        .map_err(|error| format!("Cannot update capture state: {error}"))
 }
 
 fn resolve_bridge_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -783,6 +901,22 @@ pub fn stop_capture(
 }
 
 #[tauri::command]
+pub fn pause_capture(
+    app: AppHandle,
+    manager: tauri::State<'_, CaptureManager>,
+) -> Result<CaptureStatusSnapshot, String> {
+    manager.pause(&app)
+}
+
+#[tauri::command]
+pub fn resume_capture(
+    app: AppHandle,
+    manager: tauri::State<'_, CaptureManager>,
+) -> Result<CaptureStatusSnapshot, String> {
+    manager.resume(&app)
+}
+
+#[tauri::command]
 pub fn restart_capture(
     app: AppHandle,
     manager: tauri::State<'_, CaptureManager>,
@@ -805,8 +939,10 @@ pub fn get_proxy_config(manager: tauri::State<'_, CaptureManager>) -> CaptureCon
 mod tests {
     use super::{
         CaptureConfig, CaptureManager, CaptureStatus, DEFAULT_BODY_LIMIT, MAX_BODY_LIMIT,
-        read_output_lines,
+        read_output_lines, write_capture_state,
     };
+    use std::fs;
+    use tempfile::tempdir;
 
     #[cfg(windows)]
     use super::{attach_kill_on_close_job, configure_hidden_process};
@@ -856,6 +992,32 @@ mod tests {
         let snapshot = manager.stop(None).expect("idle stop should succeed");
         assert_eq!(snapshot.status, CaptureStatus::Stopped);
         assert!(snapshot.pid.is_none());
+    }
+
+    #[test]
+    fn paused_status_keeps_proxy_active_without_recording() {
+        assert!(CaptureStatus::Paused.proxy_is_active());
+        assert!(!CaptureStatus::Paused.is_recording());
+        assert!(CaptureStatus::Running.proxy_is_active());
+        assert!(CaptureStatus::Running.is_recording());
+        assert!(!CaptureStatus::Stopped.proxy_is_active());
+    }
+
+    #[test]
+    fn capture_state_file_switches_between_enabled_and_paused() {
+        let directory = tempdir().expect("temp directory should be created");
+        let path = directory.path().join("capture-state.txt");
+
+        write_capture_state(&path, true).expect("capture should be enabled");
+        assert_eq!(
+            fs::read_to_string(&path).expect("state should be readable"),
+            "enabled\n"
+        );
+        write_capture_state(&path, false).expect("capture should be paused");
+        assert_eq!(
+            fs::read_to_string(&path).expect("state should be readable"),
+            "paused\n"
+        );
     }
 
     #[test]

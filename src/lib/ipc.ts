@@ -6,6 +6,7 @@ import type {
   CapturedBody,
   CaptureConfig,
   CaptureStatusSnapshot,
+  CertificateStatus,
   DiagnosticLogInfo,
   NetworkInfo,
   SessionSummary,
@@ -21,6 +22,14 @@ export function stopCapture(): Promise<CaptureStatusSnapshot> {
   return invoke("stop_capture");
 }
 
+export function pauseCapture(): Promise<CaptureStatusSnapshot> {
+  return invoke("pause_capture");
+}
+
+export function resumeCapture(): Promise<CaptureStatusSnapshot> {
+  return invoke("resume_capture");
+}
+
 export function restartCapture(
   config: CaptureConfig,
 ): Promise<CaptureStatusSnapshot> {
@@ -33,6 +42,18 @@ export function getCaptureStatus(): Promise<CaptureStatusSnapshot> {
 
 export function getNetworkInfo(): Promise<NetworkInfo> {
   return invoke("get_network_info");
+}
+
+export function getCertificateStatus(): Promise<CertificateStatus> {
+  return invoke("get_certificate_status");
+}
+
+export function acknowledgeCertificate(): Promise<CertificateStatus> {
+  return invoke("acknowledge_certificate");
+}
+
+export function revealCertificate(): Promise<CertificateStatus> {
+  return invoke("reveal_certificate");
 }
 
 export function getDiagnosticLogInfo(): Promise<DiagnosticLogInfo> {

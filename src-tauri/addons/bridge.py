@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode
 
@@ -11,6 +12,7 @@ PREFIX = "APPDBG_EVENT:"
 DEFAULT_BODY_LIMIT = 1_000_000
 MAX_CONFIGURED_BODY_LIMIT = 100_000_000
 REDACTED_VALUE = "••••••••"
+_CAPTURED_METADATA_KEY = "appdbg_capture_enabled"
 
 _SENSITIVE_HEADERS = {
     "authorization",
@@ -62,6 +64,12 @@ def load(loader: Any) -> None:
         default=True,
         help="Redact common credential headers and structured body fields.",
     )
+    loader.add_option(
+        name="appdbg_capture_state_file",
+        typespec=str,
+        default="",
+        help="State file used to pause capture while keeping proxy forwarding active.",
+    )
 
 
 def emit(payload: dict[str, Any]) -> None:
@@ -85,6 +93,36 @@ def _configured_redaction() -> bool:
         return bool(ctx.options.appdbg_redact_sensitive)
     except (AttributeError, RuntimeError):
         return True
+
+
+def _capture_enabled() -> bool:
+    try:
+        state_file = str(ctx.options.appdbg_capture_state_file).strip()
+    except (AttributeError, RuntimeError):
+        return True
+    if not state_file:
+        return True
+    try:
+        return Path(state_file).read_text(encoding="ascii").strip() == "enabled"
+    except OSError:
+        # Keep forwarding traffic, but fail closed for capture if the desktop
+        # control file becomes unavailable.
+        return False
+
+
+def _set_flow_capture_state(flow: http.HTTPFlow, enabled: bool) -> None:
+    metadata = getattr(flow, "metadata", None)
+    if metadata is None:
+        metadata = {}
+        flow.metadata = metadata
+    metadata[_CAPTURED_METADATA_KEY] = enabled
+
+
+def _flow_is_captured(flow: http.HTTPFlow) -> bool:
+    metadata = getattr(flow, "metadata", None)
+    if metadata is None:
+        return True
+    return bool(metadata.get(_CAPTURED_METADATA_KEY, True))
 
 
 def serialize_headers(
@@ -237,6 +275,10 @@ def serialize_body(
 
 
 def requestheaders(flow: http.HTTPFlow) -> None:
+    enabled = _capture_enabled()
+    _set_flow_capture_state(flow, enabled)
+    if not enabled:
+        return
     request = flow.request
     emit(
         {
@@ -255,6 +297,8 @@ def requestheaders(flow: http.HTTPFlow) -> None:
 
 
 def request(flow: http.HTTPFlow) -> None:
+    if not _flow_is_captured(flow):
+        return
     emit(
         {
             "event": "request_completed",
@@ -266,6 +310,8 @@ def request(flow: http.HTTPFlow) -> None:
 
 
 def responseheaders(flow: http.HTTPFlow) -> None:
+    if not _flow_is_captured(flow):
+        return
     response = flow.response
     if response is None:
         return
@@ -284,6 +330,8 @@ def responseheaders(flow: http.HTTPFlow) -> None:
 
 
 def response(flow: http.HTTPFlow) -> None:
+    if not _flow_is_captured(flow):
+        return
     captured_response = flow.response
     if captured_response is None:
         return
@@ -307,6 +355,8 @@ def response(flow: http.HTTPFlow) -> None:
 
 
 def error(flow: http.HTTPFlow) -> None:
+    if not _flow_is_captured(flow):
+        return
     emit(
         {
             "event": "flow_error",
@@ -317,6 +367,8 @@ def error(flow: http.HTTPFlow) -> None:
 
 
 def websocket_message(flow: http.HTTPFlow) -> None:
+    if not _flow_is_captured(flow) or not _capture_enabled():
+        return
     websocket = flow.websocket
     if websocket is None or not websocket.messages:
         return

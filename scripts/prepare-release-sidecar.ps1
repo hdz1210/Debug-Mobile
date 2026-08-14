@@ -11,9 +11,26 @@ $resourceDirectory = Join-Path $projectRoot "src-tauri\release-resources"
 $mitmdumpPath = Join-Path $resourceDirectory "mitmdump.exe"
 $recipeMarker = Join-Path $releaseBuildDirectory "sidecar.recipe.sha256"
 
+function Get-Sha256Hash {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return -join (
+            $hasher.ComputeHash($stream) |
+                ForEach-Object { $_.ToString("x2") }
+        )
+    }
+    finally {
+        $hasher.Dispose()
+        $stream.Dispose()
+    }
+}
+
 $recipeInput = @(
-    (Get-FileHash -LiteralPath $requirementsPath -Algorithm SHA256).Hash,
-    (Get-FileHash -LiteralPath $entryPointPath -Algorithm SHA256).Hash
+    (Get-Sha256Hash -Path $requirementsPath),
+    (Get-Sha256Hash -Path $entryPointPath)
 ) -join "`n"
 $recipeBytes = [System.Text.Encoding]::UTF8.GetBytes($recipeInput)
 $sha256 = [System.Security.Cryptography.SHA256]::Create()

@@ -28,7 +28,14 @@ export function LanProxyBanner({
   );
   const alternateAddresses =
     networkInfo?.addresses.filter((entry) => entry.address !== address) ?? [];
-  const isRunning = capture.status === "running";
+  const isProxyActive = [
+    "starting",
+    "running",
+    "pausing",
+    "paused",
+    "resuming",
+    "stopping",
+  ].includes(capture.status);
 
   const copyAddress = async () => {
     if (!address) {
@@ -90,10 +97,12 @@ export function LanProxyBanner({
       </div>
 
       <div className="lan-proxy-help">
-        <span data-running={isRunning}>
-          {isRunning
-            ? "Proxy is running. Set the phone Wi-Fi proxy to Manual."
-            : "Start capture, then set the phone Wi-Fi proxy to Manual."}
+        <span data-running={isProxyActive}>
+          {capture.status === "paused"
+            ? "Capture is paused. Proxy forwarding stays online, so the phone keeps Internet access."
+            : isProxyActive
+              ? "Proxy is running. Set the phone Wi-Fi proxy to Manual."
+              : "Start capture, then set the phone Wi-Fi proxy to Manual."}
         </span>
         {copyMessage ? <span role="status">{copyMessage}</span> : null}
         {alternateAddresses.length > 0 ? (

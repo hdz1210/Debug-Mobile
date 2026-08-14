@@ -1,3 +1,4 @@
+pub mod certificate;
 pub mod diagnostics;
 pub mod event_parser;
 pub mod file_commands;
@@ -5,12 +6,13 @@ pub mod network_info;
 pub mod process_manager;
 pub mod storage;
 
+use certificate::{acknowledge_certificate, get_certificate_status, reveal_certificate};
 use diagnostics::{get_diagnostic_log_info, reveal_diagnostic_log, write_frontend_diagnostic};
 use file_commands::save_captured_body;
 use network_info::get_network_info;
 use process_manager::{
-    CaptureManager, get_capture_status, get_proxy_config, restart_capture, start_capture,
-    stop_capture,
+    CaptureManager, get_capture_status, get_proxy_config, pause_capture, restart_capture,
+    resume_capture, start_capture, stop_capture,
 };
 use storage::{SessionStore, delete_session, list_sessions, load_session_events, rename_session};
 use tauri::Manager;
@@ -33,6 +35,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             start_capture,
+            pause_capture,
+            resume_capture,
             stop_capture,
             restart_capture,
             get_capture_status,
@@ -45,7 +49,10 @@ pub fn run() {
             delete_session,
             get_diagnostic_log_info,
             reveal_diagnostic_log,
-            write_frontend_diagnostic
+            write_frontend_diagnostic,
+            get_certificate_status,
+            acknowledge_certificate,
+            reveal_certificate
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

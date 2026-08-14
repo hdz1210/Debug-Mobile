@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { CaptureToolbar } from "./components/capture-toolbar/CaptureToolbar";
+import { CertificatePanel } from "./components/certificate-panel/CertificatePanel";
 import { ConsentDialog } from "./components/consent-dialog/ConsentDialog";
 import { HistoryPanel } from "./components/history-panel/HistoryPanel";
 import { LanProxyBanner } from "./components/lan-proxy-banner/LanProxyBanner";
@@ -8,14 +9,20 @@ import { NetworkTable } from "./components/network-table/NetworkTable";
 import { RequestDetails } from "./components/request-details/RequestDetails";
 import { useBackendEvents } from "./hooks/use-backend-events";
 import {
+  acknowledgeCertificate,
+  getCertificateStatus,
   getNetworkInfo,
   loadSessionEvents,
+  pauseCapture,
+  resumeCapture,
+  revealCertificate,
   revealDiagnosticLog,
   startCapture,
   stopCapture,
 } from "./lib/ipc";
 import { useFlowStore } from "./stores/flow-store";
 import type {
+  CertificateStatus,
   CaptureConfig,
   NetworkInfo,
   SessionSummary,
@@ -59,6 +66,11 @@ function App() {
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [networkInfoError, setNetworkInfoError] = useState<string | null>(null);
   const [isScanningNetwork, setIsScanningNetwork] = useState(false);
+  const [certificateStatus, setCertificateStatus] =
+    useState<CertificateStatus | null>(null);
+  const [isCertificateOpen, setIsCertificateOpen] = useState(false);
+  const [isCertificateBusy, setIsCertificateBusy] = useState(false);
+  const [certificateError, setCertificateError] = useState<string | null>(null);
 
   const refreshNetworkInfo = useCallback(async () => {
     setIsScanningNetwork(true);
@@ -72,9 +84,28 @@ function App() {
     }
   }, []);
 
+  const refreshCertificateStatus = useCallback(async () => {
+    setIsCertificateBusy(true);
+    try {
+      const status = await getCertificateStatus();
+      setCertificateStatus(status);
+      setCertificateError(null);
+      return status;
+    } catch (error) {
+      setCertificateError(readableError(error));
+      return null;
+    } finally {
+      setIsCertificateBusy(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshNetworkInfo();
   }, [refreshNetworkInfo]);
+
+  useEffect(() => {
+    void refreshCertificateStatus();
+  }, [refreshCertificateStatus]);
 
   useEffect(() => {
     if (bindMode !== "lan") {
@@ -129,6 +160,16 @@ function App() {
   const selectedFlow = selectedFlowId
     ? (flowsById[selectedFlowId] ?? null)
     : null;
+  const proxyActive = [
+    "starting",
+    "running",
+    "pausing",
+    "paused",
+    "resuming",
+    "stopping",
+  ].includes(capture.status);
+  const certificateNeedsAttention =
+    certificateStatus === null || certificateStatus.state !== "ready";
 
   const performStart = async () => {
     const config: CaptureConfig = {
@@ -143,6 +184,10 @@ function App() {
     clearFlows();
     try {
       setCapture(await startCapture(config));
+      const status = await refreshCertificateStatus();
+      if (status?.state === "changed" || status?.state === "setup_required") {
+        setIsCertificateOpen(true);
+      }
     } catch (error) {
       setActionError(readableError(error));
     } finally {
@@ -184,6 +229,54 @@ function App() {
     }
   };
 
+  const handlePause = async () => {
+    setIsBusy(true);
+    setActionError(null);
+    try {
+      setCapture(await pauseCapture());
+    } catch (error) {
+      setActionError(readableError(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleResume = async () => {
+    setIsBusy(true);
+    setActionError(null);
+    try {
+      setCapture(await resumeCapture());
+    } catch (error) {
+      setActionError(readableError(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleAcknowledgeCertificate = async () => {
+    setIsCertificateBusy(true);
+    setCertificateError(null);
+    try {
+      setCertificateStatus(await acknowledgeCertificate());
+    } catch (error) {
+      setCertificateError(readableError(error));
+    } finally {
+      setIsCertificateBusy(false);
+    }
+  };
+
+  const handleRevealCertificate = async () => {
+    setIsCertificateBusy(true);
+    setCertificateError(null);
+    try {
+      setCertificateStatus(await revealCertificate());
+    } catch (error) {
+      setCertificateError(readableError(error));
+    } finally {
+      setIsCertificateBusy(false);
+    }
+  };
+
   const handleOpenLogs = async () => {
     try {
       await revealDiagnosticLog();
@@ -199,19 +292,26 @@ function App() {
       <CaptureToolbar
         bindMode={bindMode}
         capture={capture}
+        certificateNeedsAttention={certificateNeedsAttention}
         isBusy={isBusy}
         port={port}
         searchQuery={searchQuery}
         onBindModeChange={setBindMode}
         onClear={clearFlows}
+        onCertificate={() => {
+          setIsCertificateOpen(true);
+          void refreshCertificateStatus();
+        }}
         onHistory={() => setIsHistoryOpen(true)}
         onOpenLogs={() => void handleOpenLogs()}
+        onPause={() => void handlePause()}
         onPortChange={(nextPort) => {
           if (Number.isFinite(nextPort)) {
             setPort(Math.min(65535, Math.max(1, Math.round(nextPort))));
           }
         }}
         onSearchChange={setSearchQuery}
+        onResume={() => void handleResume()}
         onStart={handleStart}
         onStop={() => void handleStop()}
       />
@@ -223,12 +323,10 @@ function App() {
             isScanning={isScanningNetwork}
             networkError={networkInfoError}
             networkInfo={networkInfo}
-            port={
-              capture.status === "running" ? capture.port : port
-            }
+            port={proxyActive ? capture.port : port}
             onRefresh={() => void refreshNetworkInfo()}
           />
-          {capture.status !== "running" ? (
+          {!proxyActive ? (
             <div className="notice notice-warning" role="status">
               LAN mode exposes the proxy to devices on this network. Use it only
               on a trusted network.
@@ -269,6 +367,17 @@ function App() {
         open={isConsentOpen}
         onCancel={() => setIsConsentOpen(false)}
         onConfirm={handleConsent}
+      />
+      <CertificatePanel
+        open={isCertificateOpen}
+        status={certificateStatus}
+        isBusy={isCertificateBusy}
+        error={certificateError}
+        proxyActive={proxyActive}
+        onAcknowledge={() => void handleAcknowledgeCertificate()}
+        onClose={() => setIsCertificateOpen(false)}
+        onRefresh={() => void refreshCertificateStatus()}
+        onReveal={() => void handleRevealCertificate()}
       />
       <HistoryPanel
         open={isHistoryOpen}

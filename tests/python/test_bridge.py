@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest import mock
 
 from mitmproxy import http
 
@@ -58,6 +59,23 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(loader.options[0]["default"], 1_000_000)
         self.assertEqual(loader.options[1]["name"], "appdbg_redact_sensitive")
         self.assertTrue(loader.options[1]["default"])
+        self.assertEqual(loader.options[2]["name"], "appdbg_capture_state_file")
+        self.assertEqual(loader.options[2]["default"], "")
+
+    def test_paused_capture_suppresses_new_flow_events(self) -> None:
+        request = http.Request.make("GET", "https://api.example.com/items")
+        flow = SimpleNamespace(id="paused-flow", request=request, metadata={})
+        output = io.StringIO()
+
+        with (
+            mock.patch.object(bridge, "_capture_enabled", return_value=False),
+            contextlib.redirect_stdout(output),
+        ):
+            bridge.requestheaders(flow)
+            bridge.request(flow)
+
+        self.assertEqual(output.getvalue(), "")
+        self.assertFalse(flow.metadata[bridge._CAPTURED_METADATA_KEY])
 
     def test_request_started_preserves_duplicate_headers(self) -> None:
         headers = http.Headers(

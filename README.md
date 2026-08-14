@@ -29,6 +29,10 @@ interface inspired by the Network panel in browser developer tools.
 - Redact sensitive headers and data fields before displaying them.
 - Keep captured data locally on the computer.
 - Open a persistent diagnostic log when capture or networking fails.
+- Pause recording while keeping proxy forwarding online, so the phone retains
+  Internet access.
+- Reuse a private per-installation CA and warn only when its fingerprint
+  changes.
 - Use the packaged Windows application without installing Python or mitmproxy.
 
 ## Onboarding
@@ -47,15 +51,21 @@ interface inspired by the Network panel in browser developer tools.
 3. On the phone, open the current Wi-Fi settings and set **Proxy** to
    **Manual**. Enter the **Host / IP** displayed by the desktop app and port
    `8080`. Leave authentication off.
-4. Open `http://mitm.it` on the phone and install the mitmproxy certificate.
+4. Click **Certificate** and scan the QR code, or open `http://mitm.it` on the
+   phone, then install the mitmproxy certificate.
    On iPhone or iPad, also open **Settings → General → About → Certificate
    Trust Settings** and enable full trust for the certificate.
 5. Open the mobile app you want to inspect. Select any captured request in the
    desktop app to view its headers, payload, response, and timing.
 
-When finished, click **Stop** and set the phone's Wi-Fi proxy back to **Off**.
-After changing Wi-Fi networks, refresh the local IP in the desktop app and
-update the proxy server on the phone.
+The certificate is a one-time setup for this desktop installation. Stop/Start,
+closing the app, or changing Wi-Fi does not require reinstalling it unless the
+desktop app explicitly reports **Certificate changed**.
+
+Use **Pause capture** when you want to stop recording but keep the phone online.
+Use **Stop** only when you want to shut down the proxy; then set the phone's
+Wi-Fi proxy back to **Off**. After changing Wi-Fi networks, refresh the local IP
+and update only the proxy server on the phone.
 
 > Some applications ignore the system proxy or use certificate pinning and
 > therefore cannot be captured. This project does not bypass certificate

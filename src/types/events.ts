@@ -2,6 +2,9 @@ export type CaptureStatus =
   | "stopped"
   | "starting"
   | "running"
+  | "pausing"
+  | "paused"
+  | "resuming"
   | "stopping"
   | "failed";
 
@@ -35,6 +38,20 @@ export type DiagnosticLogInfo = {
   directoryPath: string;
   previousFilePath: string;
   maxSizeBytes: number;
+};
+
+export type CertificateState =
+  | "missing"
+  | "setup_required"
+  | "changed"
+  | "ready";
+
+export type CertificateStatus = {
+  state: CertificateState;
+  certificatePath: string | null;
+  fingerprintSha256: string | null;
+  createdAt: number | null;
+  installUrl: string;
 };
 
 export type SessionSummary = {
