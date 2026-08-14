@@ -33,6 +33,8 @@ interface inspired by the Network panel in browser developer tools.
   Internet access.
 - Reuse a private per-installation CA and warn only when its fingerprint
   changes.
+- Recognize supported Firebase and Google Analytics uploads and present their
+  events, parameters, user properties, items, and consent in a dedicated view.
 - Use the packaged Windows application without installing Python or mitmproxy.
 
 ## Onboarding
@@ -76,10 +78,10 @@ and update only the proxy server on the phone.
 
 ### Windows x64
 
-- **[Download the v0.1.3 installer (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.3/App-Network-Debugger_0.1.3_windows-x64-setup.exe)**
-- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.3/App-Network-Debugger_0.1.3_windows-x64.msi)
-- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.3/SHA256SUMS.txt)
-- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.3)
+- **[Download the v0.1.4 installer (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.4/App-Network-Debugger_0.1.4_windows-x64-setup.exe)**
+- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.4/App-Network-Debugger_0.1.4_windows-x64.msi)
+- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.4/SHA256SUMS.txt)
+- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.4)
 
 The installer is not currently code-signed, so Windows SmartScreen may display
 an **Unknown publisher** warning.
