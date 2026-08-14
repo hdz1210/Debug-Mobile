@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { NetworkFlow } from "../../types/events";
+import { AnalyticsPanel } from "../analytics/AnalyticsPanel";
 import { BodyViewer } from "./body-viewer";
 
 type RequestDetailsProps = {
@@ -8,6 +9,7 @@ type RequestDetailsProps = {
 
 type DetailTab =
   | "overview"
+  | "analytics"
   | "headers"
   | "query"
   | "payload"
@@ -17,6 +19,7 @@ type DetailTab =
 
 const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: "overview", label: "Overview" },
+  { id: "analytics", label: "Analytics" },
   { id: "headers", label: "Headers" },
   { id: "query", label: "Query" },
   { id: "payload", label: "Payload" },
@@ -260,7 +263,9 @@ function WebSocketPanel({ flow }: { flow: NetworkFlow }) {
 }
 
 export function RequestDetails({ flow }: RequestDetailsProps) {
-  const [activeTab, setActiveTab] = useState<DetailTab>("overview");
+  const [activeTab, setActiveTab] = useState<DetailTab>(() =>
+    flow?.analysis?.serviceId === "analytics" ? "analytics" : "overview",
+  );
 
   if (!flow) {
     return (
@@ -276,6 +281,9 @@ export function RequestDetails({ flow }: RequestDetailsProps) {
 
   const requestFileName = `${flow.id}-request.bin`;
   const responseFileName = `${flow.id}-response.bin`;
+  const visibleTabs = tabs.filter(
+    (tab) => tab.id !== "analytics" || flow.analysis?.serviceId === "analytics",
+  );
 
   return (
     <aside className="request-details">
@@ -284,7 +292,7 @@ export function RequestDetails({ flow }: RequestDetailsProps) {
         <h2 title={flow.url}>{flow.path ?? flow.url ?? flow.id}</h2>
       </div>
       <nav className="detail-tabs" aria-label="Request detail sections">
-        {tabs.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -300,6 +308,9 @@ export function RequestDetails({ flow }: RequestDetailsProps) {
       </nav>
       <div className="detail-content">
         {activeTab === "overview" ? <OverviewPanel flow={flow} /> : null}
+        {activeTab === "analytics" && flow.analysis ? (
+          <AnalyticsPanel analysis={flow.analysis} />
+        ) : null}
         {activeTab === "headers" ? <HeadersPanel flow={flow} /> : null}
         {activeTab === "query" ? <QueryPanel flow={flow} /> : null}
         {activeTab === "payload" ? (

@@ -35,6 +35,12 @@
     ],
     "resources": {
       "addons/bridge.py": "addons/bridge.py",
+      "addons/analyzers/__init__.py": "addons/analyzers/__init__.py",
+      "addons/analyzers/classifier.py": "addons/analyzers/classifier.py",
+      "addons/analyzers/firebase_native.py": "addons/analyzers/firebase_native.py",
+      "addons/analyzers/google_analytics.py": "addons/analyzers/google_analytics.py",
+      "addons/analyzers/protobuf_wire.py": "addons/analyzers/protobuf_wire.py",
+      "addons/analyzers/redaction.py": "addons/analyzers/redaction.py",
       "release-resources/mitmdump.exe": "bin/mitmdump.exe",
       "../LICENSE": "licenses/Debug-Mobile-LICENSE.txt",
       "../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES.md",

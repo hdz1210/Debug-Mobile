@@ -84,6 +84,53 @@ describe("flow store", () => {
     });
   });
 
+  it("merges request analysis into live and replayed flows", () => {
+    const analysis = {
+      providerId: "firebase",
+      providerLabel: "Firebase",
+      serviceId: "analytics",
+      serviceLabel: "Firebase Analytics",
+      protocol: "firebase-native",
+      platform: "ios",
+      confidence: 0.98,
+      status: "decoded",
+      parserVersion: "1",
+      tags: ["analytics", "firebase"],
+      bundles: [
+        {
+          appId: "com.example.app",
+          userProperties: { plan: "pro" },
+          consent: { analytics_storage: "granted" },
+          events: [
+            {
+              name: "view_item",
+              parameters: { currency: "VND" },
+              items: [{ item_id: "sku-1" }],
+            },
+          ],
+        },
+      ],
+      warnings: [],
+    } satisfies NonNullable<
+      Extract<BridgeEvent, { event: "request_completed" }>["analysis"]
+    >;
+
+    [
+      requestStarted,
+      {
+        event: "request_completed" as const,
+        flowId: "flow-1",
+        body: null,
+        endedAt: 100.1,
+        analysis,
+      },
+    ].forEach(useFlowStore.getState().upsertBridgeEvent);
+
+    expect(useFlowStore.getState().flowsById["flow-1"].analysis).toEqual(
+      analysis,
+    );
+  });
+
   it("records WebSocket messages and failed flows", () => {
     useFlowStore.getState().upsertBridgeEvent({
       event: "websocket_message",

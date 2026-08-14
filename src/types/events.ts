@@ -73,6 +73,49 @@ export type CapturedBody = {
   truncated: boolean;
 };
 
+export type AnalysisValue =
+  | null
+  | boolean
+  | number
+  | string
+  | AnalysisValue[]
+  | { [key: string]: AnalysisValue };
+
+export type FlowAnalysisEvent = {
+  name: string;
+  timestampMs?: number;
+  timestampMicros?: number;
+  origin?: string;
+  parameters: Record<string, AnalysisValue>;
+  items: Array<Record<string, AnalysisValue>>;
+};
+
+export type FlowAnalysisBundle = {
+  appId?: string;
+  appName?: string;
+  appVersion?: string;
+  platform?: string;
+  measurementId?: string;
+  userProperties: Record<string, AnalysisValue>;
+  consent: Record<string, AnalysisValue>;
+  events: FlowAnalysisEvent[];
+};
+
+export type FlowAnalysis = {
+  providerId: string;
+  providerLabel: string;
+  serviceId: string;
+  serviceLabel: string;
+  protocol: string;
+  platform?: string;
+  confidence: number;
+  status: string;
+  parserVersion: string;
+  tags: string[];
+  bundles: FlowAnalysisBundle[];
+  warnings: string[];
+};
+
 export type BridgeEvent =
   | {
       event: "request_started";
@@ -91,6 +134,7 @@ export type BridgeEvent =
       flowId: string;
       body: CapturedBody | null;
       endedAt: number | null;
+      analysis?: FlowAnalysis | null;
     }
   | {
       event: "response_started";
@@ -147,6 +191,7 @@ export type NetworkFlow = {
   requestHeaders?: HeaderEntry[];
   responseHeaders?: HeaderEntry[];
   requestBody?: CapturedBody | null;
+  analysis?: FlowAnalysis | null;
   responseBody?: CapturedBody | null;
   requestStartedAt?: number;
   requestEndedAt?: number | null;

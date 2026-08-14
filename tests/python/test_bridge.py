@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import contextlib
+import gzip
 import io
 import json
 import sys
 import unittest
+from base64 import b64encode
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -14,6 +16,7 @@ from mitmproxy import http
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ADDON_DIRECTORY = PROJECT_ROOT / "src-tauri" / "addons"
+FIXTURE_DIRECTORY = Path(__file__).resolve().parent / "fixtures"
 sys.path.insert(0, str(ADDON_DIRECTORY))
 
 import bridge  # noqa: E402
@@ -142,6 +145,23 @@ class BridgeTests(unittest.TestCase):
             "%E2%80%A2%E2%80%A2%E2%80%A2%E2%80%A2",
         )
 
+    def test_form_batch_redaction_preserves_line_boundaries(self) -> None:
+        request = http.Request.make(
+            "POST",
+            "https://www.google-analytics.com/batch?v=1&tid=UA-TEST",
+            content="t=event&ea=first&token=one\nt=event&ea=second&token=two",
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+
+        body = bridge.serialize_body(request, body_limit=10_000)
+
+        self.assertEqual(body["data"].count("\n"), 1)
+        first, second = body["data"].split("\n")
+        self.assertIn("ea=first", first)
+        self.assertIn("ea=second", second)
+        self.assertNotIn("one", body["data"])
+        self.assertNotIn("two", body["data"])
+
     def test_binary_body_is_base64_encoded(self) -> None:
         request = http.Request.make(
             "POST",
@@ -156,6 +176,92 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(body["format"], "base64")
         self.assertEqual(body["data"], "AAEC/w==")
         self.assertEqual(body["size"], 4)
+
+    def test_native_firebase_body_preserves_exact_decoded_bytes_as_base64(self) -> None:
+        decoded = bytes.fromhex(
+            (FIXTURE_DIRECTORY / "firebase_native_batch.hex").read_text(encoding="ascii")
+        )
+        request = http.Request.make(
+            "POST",
+            "https://app-measurement.com/a",
+            content=b"",
+            headers={
+                "content-type": "application/x-www-form-urlencoded",
+                "content-encoding": "gzip",
+            },
+        )
+        request.raw_content = gzip.compress(decoded)
+
+        body = bridge.serialize_body(request, body_limit=10_000)
+
+        self.assertEqual(body["format"], "base64")
+        self.assertEqual(body["data"], b64encode(decoded).decode("ascii"))
+        self.assertEqual(body["size"], len(decoded))
+        self.assertFalse(body["truncated"])
+
+    def test_request_completed_includes_canonical_analytics_shape(self) -> None:
+        decoded = bytes.fromhex(
+            (FIXTURE_DIRECTORY / "firebase_native_batch.hex").read_text(encoding="ascii")
+        )
+        request = http.Request.make(
+            "POST",
+            "https://app-measurement.com/a",
+            content=decoded,
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+        flow = SimpleNamespace(id="firebase-flow", request=request)
+
+        event = emitted_event(bridge.request, flow)
+
+        analysis = event["analysis"]
+        self.assertEqual(
+            {
+                "providerId",
+                "providerLabel",
+                "serviceId",
+                "serviceLabel",
+                "protocol",
+                "platform",
+                "confidence",
+                "status",
+                "parserVersion",
+                "tags",
+                "bundles",
+                "warnings",
+            },
+            set(analysis),
+        )
+        self.assertIsInstance(analysis["confidence"], float)
+        bundle = analysis["bundles"][0]
+        self.assertIsInstance(bundle["userProperties"], dict)
+        self.assertIsInstance(bundle["consent"], dict)
+        self.assertIsInstance(bundle["events"], list)
+        analytics_event = bundle["events"][0]
+        self.assertEqual(
+            {"name", "timestampMs", "origin", "parameters", "items"},
+            set(analytics_event),
+        )
+
+    def test_request_analysis_respects_the_capture_body_limit(self) -> None:
+        decoded = bytes.fromhex(
+            (FIXTURE_DIRECTORY / "firebase_native_batch.hex").read_text(encoding="ascii")
+        )
+        request = http.Request.make(
+            "POST",
+            "https://app-measurement.com/a",
+            content=decoded,
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+        flow = SimpleNamespace(id="limited-flow", request=request)
+
+        with mock.patch.object(bridge, "_configured_body_limit", return_value=24):
+            event = emitted_event(bridge.request, flow)
+
+        self.assertTrue(event["body"]["truncated"])
+        self.assertEqual(event["body"]["size"], len(decoded))
+        self.assertTrue(
+            any("capture limit" in warning for warning in event["analysis"]["warnings"])
+        )
 
     def test_body_limit_is_applied_before_encoding(self) -> None:
         response = http.Response.make(

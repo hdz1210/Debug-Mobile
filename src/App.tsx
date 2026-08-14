@@ -20,6 +20,7 @@ import {
   startCapture,
   stopCapture,
 } from "./lib/ipc";
+import { flowMatchesSearch } from "./lib/flow-search";
 import { useFlowStore } from "./stores/flow-store";
 import type {
   CertificateStatus,
@@ -135,26 +136,7 @@ function App() {
     const query = searchQuery.trim().toLowerCase();
     return orderedFlowIds
       .map((flowId) => flowsById[flowId])
-      .filter((flow) => {
-        if (!query) {
-          return true;
-        }
-        return [
-          flow.method,
-          flow.url,
-          flow.host,
-          flow.path,
-          flow.statusCode,
-          flow.requestBody?.format === "text"
-            ? flow.requestBody.data
-            : undefined,
-          flow.responseBody?.format === "text"
-            ? flow.responseBody.data
-            : undefined,
-        ]
-          .filter((value) => value !== undefined)
-          .some((value) => String(value).toLowerCase().includes(query));
-      });
+      .filter((flow) => flowMatchesSearch(flow, query));
   }, [flowsById, orderedFlowIds, searchQuery]);
 
   const selectedFlow = selectedFlowId
