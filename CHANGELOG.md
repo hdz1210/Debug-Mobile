@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] - 2026-08-15
+
+### Changed
+
+- Redesigned the Firebase Analytics events panel with distinct, high-contrast event cards, category-specific accent borders, event index badges, and human-readable event labels.
+- Added hero parameter chips to spotlight critical event metadata (screen, category, location, currency, value, cart) at a glance.
+- Added real-time event search filtering by event name or parameter value and global Expand all / Collapse all controls.
+- Added one-click copy for individual parameter values and per-event full JSON export.
+- Cleaned up non-actionable internal Google Protobuf hardware metadata decoder warnings and promoted cleanly decoded Firebase batches to 100% confidence Decoded status.
+
 ## [0.1.5] - 2026-08-15
 
 ### Added

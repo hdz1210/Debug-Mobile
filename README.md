@@ -80,10 +80,10 @@ and update only the proxy server on the phone.
 
 ### Windows x64
 
-- **[Download the v0.1.5 installer (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.5/App-Network-Debugger_0.1.5_windows-x64-setup.exe)**
-- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.5/App-Network-Debugger_0.1.5_windows-x64.msi)
-- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.5/SHA256SUMS.txt)
-- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.5)
+- **[Download the v0.1.6 installer (.exe)](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.6/App-Network-Debugger_0.1.6_windows-x64-setup.exe)**
+- [Download the MSI package](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.6/App-Network-Debugger_0.1.6_windows-x64.msi)
+- [Verify SHA-256 checksums](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.6/SHA256SUMS.txt)
+- [View the release page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.6)
 
 The installer is not currently code-signed, so Windows SmartScreen may display
 an **Unknown publisher** warning.

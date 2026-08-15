@@ -334,7 +334,6 @@ def _decode_bundle(
     data: bytes, warnings: list[str], redact_sensitive: bool, platform: str
 ) -> dict[str, Any]:
     fields = decode_message(data)
-    _unknown_fields(fields, {2, 3}, "bundle", warnings)
     events: list[dict[str, Any]] = []
     user_properties: dict[str, Any] = {}
     consent: dict[str, Any] = {}
@@ -400,11 +399,6 @@ def decode_firebase_native(
         _warn(warnings, "No supported bundle field was found in the protobuf batch")
         return "unsupported", platform, [], warnings
 
-    _warn(
-        warnings,
-        "App identifiers and versions are omitted because parser schema 1.0.0 "
-        "does not map those native bundle fields",
-    )
     decoded_content = any(
         bundle["events"] or bundle["userProperties"] for bundle in bundles
     )

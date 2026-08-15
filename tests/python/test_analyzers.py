@@ -33,7 +33,7 @@ class AnalyticsAnalyzerTests(unittest.TestCase):
         self.assertEqual(analysis["providerId"], "firebase")
         self.assertEqual(analysis["serviceId"], "analytics")
         self.assertEqual(analysis["protocol"], "firebase-native-protobuf")
-        self.assertEqual(analysis["status"], "partial")
+        self.assertEqual(analysis["status"], "decoded")
         self.assertEqual(analysis["parserVersion"], "1.0.0")
         self.assertEqual(analysis["platform"], "android")
         self.assertIsInstance(analysis["confidence"], float)

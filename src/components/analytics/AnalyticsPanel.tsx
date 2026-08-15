@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type {
   AnalysisValue,
   FlowAnalysis,
@@ -14,12 +15,24 @@ type AnalyticsPanelProps = {
   analysis: FlowAnalysis;
 };
 
+type EventCategory = "ecommerce" | "screen_view" | "engagement" | "session" | "custom";
+
 function formatConfidence(confidence: number): string {
   const percentage = confidence <= 1 ? confidence * 100 : confidence;
   return `${Math.round(Math.max(0, Math.min(100, percentage)))}%`;
 }
 
 function formatEventTimestamp(event: FlowAnalysisEvent): string | null {
+  if (event.timestampMs !== undefined) {
+    return new Date(event.timestampMs).toLocaleTimeString();
+  }
+  if (event.timestampMicros !== undefined) {
+    return new Date(event.timestampMicros / 1_000).toLocaleTimeString();
+  }
+  return null;
+}
+
+function formatFullTimestamp(event: FlowAnalysisEvent): string | null {
   if (event.timestampMs !== undefined) {
     return new Date(event.timestampMs).toLocaleString();
   }
@@ -29,6 +42,77 @@ function formatEventTimestamp(event: FlowAnalysisEvent): string | null {
   return null;
 }
 
+function getEventCategory(name: string): {
+  category: EventCategory;
+  label: string;
+} {
+  const lower = name.toLowerCase();
+  if (lower === "_vs" || lower.includes("screen")) {
+    return { category: "screen_view", label: "Screen View" };
+  }
+  if (
+    [
+      "view_item",
+      "view_item_list",
+      "add_to_cart",
+      "remove_from_cart",
+      "view_cart",
+      "begin_checkout",
+      "purchase",
+      "add_payment_info",
+      "add_shipping_info",
+      "refund",
+    ].includes(lower)
+  ) {
+    return { category: "ecommerce", label: "E-Commerce" };
+  }
+  if (["_s", "session_start", "first_open", "app_open"].includes(lower)) {
+    return { category: "session", label: "Session" };
+  }
+  if (["_e", "user_engagement", "app_exception", "app_update"].includes(lower)) {
+    return { category: "engagement", label: "Engagement" };
+  }
+  return { category: "custom", label: "Custom Event" };
+}
+
+function getHeroChips(
+  parameters: Record<string, AnalysisValue>,
+): Array<{ key: string; label: string; value: string }> {
+  const chips: Array<{ key: string; label: string; value: string }> = [];
+
+  const heroKeys: Array<{ key: string; label: string }> = [
+    { key: "screen_type", label: "Screen" },
+    { key: "screen_name", label: "Screen" },
+    { key: "firebase_screen", label: "Screen" },
+    { key: "_sn", label: "Screen Name" },
+    { key: "_pn", label: "Prev Screen" },
+    { key: "item_category", label: "Category" },
+    { key: "item_category2", label: "Sub-cat" },
+    { key: "location_id", label: "Location" },
+    { key: "cart_type", label: "Cart" },
+    { key: "currency", label: "Currency" },
+    { key: "value", label: "Value" },
+    { key: "item_name", label: "Item" },
+    { key: "item_id", label: "SKU" },
+    { key: "user_id", label: "User" },
+  ];
+
+  for (const { key, label } of heroKeys) {
+    if (key in parameters) {
+      const raw = parameters[key];
+      if (raw !== null && raw !== undefined && raw !== "") {
+        chips.push({
+          key,
+          label,
+          value: String(raw),
+        });
+      }
+    }
+  }
+
+  return chips.slice(0, 5);
+}
+
 function ObjectTable({
   values,
   emptyMessage,
@@ -36,19 +120,44 @@ function ObjectTable({
   values: Record<string, AnalysisValue>;
   emptyMessage: string;
 }) {
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const entries = Object.entries(values);
+
   if (!entries.length) {
     return <p className="analytics-empty-inline">{emptyMessage}</p>;
   }
+
+  const handleCopy = async (key: string, val: AnalysisValue) => {
+    try {
+      const text =
+        typeof val === "object" ? JSON.stringify(val, null, 2) : String(val);
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    } catch {
+      // Ignore clipboard error
+    }
+  };
 
   return (
     <table className="key-value-table analytics-value-table">
       <tbody>
         {entries.map(([name, value]) => (
           <tr key={name}>
-            <th>{name}</th>
-            <td>
-              <pre>{formatAnalysisValue(value)}</pre>
+            <th className="param-name-cell">
+              <span>{name}</span>
+            </th>
+            <td
+              className="param-value-cell"
+              title="Click to copy value"
+              onClick={() => void handleCopy(name, value)}
+            >
+              <div className="param-value-wrap">
+                <pre>{formatAnalysisValue(value)}</pre>
+                {copiedKey === name ? (
+                  <span className="copy-tag">Copied!</span>
+                ) : null}
+              </div>
             </td>
           </tr>
         ))}
@@ -83,45 +192,133 @@ function BundleMetadata({ bundle }: { bundle: FlowAnalysisBundle }) {
 function EventCard({
   event,
   index,
+  isOpen,
+  onToggle,
 }: {
   event: FlowAnalysisEvent;
   index: number;
+  isOpen: boolean;
+  onToggle: () => void;
 }) {
-  const timestamp = formatEventTimestamp(event);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const timeStr = formatEventTimestamp(event);
+  const fullTime = formatFullTimestamp(event);
+  const { category, label: categoryLabel } = getEventCategory(event.name);
+  const heroChips = getHeroChips(event.parameters);
+  const paramCount = Object.keys(event.parameters).length;
+
+  const copyEventJson = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const data = JSON.stringify(event, null, 2);
+      await navigator.clipboard.writeText(data);
+      setCopyStatus("Copied!");
+      setTimeout(() => setCopyStatus(null), 1500);
+    } catch {
+      setCopyStatus("Failed");
+    }
+  };
 
   return (
-    <article className="analytics-event-card">
-      <header>
-        <span className="analytics-event-index">{index + 1}</span>
-        <h4>{event.name}</h4>
-        {event.origin ? <span>Origin: {event.origin}</span> : null}
-        {timestamp ? <time>{timestamp}</time> : null}
+    <article
+      className="analytics-event-card"
+      data-category={category}
+      data-open={isOpen}
+    >
+      <header className="event-card-header" onClick={onToggle}>
+        <div className="event-header-left">
+          <span className="event-index-pill">#{index + 1}</span>
+          <h4 className="event-title">{event.name}</h4>
+          <span className="event-category-badge" data-category={category}>
+            {categoryLabel}
+          </span>
+        </div>
+
+        <div className="event-header-right">
+          {event.origin ? (
+            <span className="event-meta-pill origin-pill" title="Event origin">
+              {event.origin}
+            </span>
+          ) : null}
+
+          {timeStr ? (
+            <time className="event-meta-pill time-pill" title={fullTime ?? ""}>
+              🕒 {timeStr}
+            </time>
+          ) : null}
+
+          <span className="event-meta-pill param-count-pill">
+            {paramCount} {paramCount === 1 ? "param" : "params"}
+          </span>
+
+          {event.items.length ? (
+            <span className="event-meta-pill items-count-pill">
+              🛍️ {event.items.length} {event.items.length === 1 ? "item" : "items"}
+            </span>
+          ) : null}
+
+          <button
+            type="button"
+            className="event-copy-btn"
+            title="Copy full event JSON"
+            onClick={copyEventJson}
+          >
+            {copyStatus ?? "Copy JSON"}
+          </button>
+
+          <button
+            type="button"
+            className="event-toggle-btn"
+            aria-label={isOpen ? "Collapse event" : "Expand event"}
+            aria-expanded={isOpen}
+          >
+            {isOpen ? "▲" : "▼"}
+          </button>
+        </div>
       </header>
 
-      <details open>
-        <summary>
-          Parameters <span>{Object.keys(event.parameters).length}</span>
-        </summary>
-        <ObjectTable
-          values={event.parameters}
-          emptyMessage="No event parameters were decoded."
-        />
-      </details>
+      {/* Hero chips row visible when summary contains key highlights */}
+      {heroChips.length > 0 ? (
+        <div className="event-hero-chips" onClick={onToggle}>
+          {heroChips.map((chip) => (
+            <span key={chip.key} className="hero-chip">
+              <strong className="chip-label">{chip.label}:</strong>{" "}
+              <span className="chip-value">{chip.value}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
 
-      {event.items.length ? (
-        <details open>
-          <summary>
-            Items <span>{event.items.length}</span>
-          </summary>
-          <div className="analytics-items">
-            {event.items.map((item, itemIndex) => (
-              <section key={itemIndex} className="analytics-item">
-                <h5>Item {itemIndex + 1}</h5>
-                <ObjectTable values={item} emptyMessage="This item is empty." />
-              </section>
-            ))}
+      {isOpen ? (
+        <div className="event-card-body">
+          <div className="event-details-section">
+            <h5 className="section-label">
+              Parameters ({paramCount})
+            </h5>
+            <ObjectTable
+              values={event.parameters}
+              emptyMessage="No event parameters were decoded."
+            />
           </div>
-        </details>
+
+          {event.items.length ? (
+            <div className="event-details-section items-section">
+              <h5 className="section-label">
+                Items ({event.items.length})
+              </h5>
+              <div className="analytics-items-grid">
+                {event.items.map((item, itemIndex) => (
+                  <section key={itemIndex} className="analytics-item-card">
+                    <header className="item-card-header">
+                      <h6>Item #{itemIndex + 1}</h6>
+                    </header>
+                    <ObjectTable values={item} emptyMessage="This item is empty." />
+                  </section>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );
@@ -134,50 +331,158 @@ function BundleCard({
   bundle: FlowAnalysisBundle;
   index: number;
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [openStates, setOpenStates] = useState<Record<number, boolean>>({});
+  const [defaultAllOpen, setDefaultAllOpen] = useState(true);
+
   const title =
     bundle.appName ?? bundle.appId ?? bundle.measurementId ?? `Bundle ${index + 1}`;
+
+  const filteredEvents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return bundle.events;
+
+    return bundle.events.filter((event) => {
+      if (event.name.toLowerCase().includes(query)) return true;
+      if (event.origin && event.origin.toLowerCase().includes(query)) return true;
+      // Search inside parameters
+      for (const [k, v] of Object.entries(event.parameters)) {
+        if (k.toLowerCase().includes(query)) return true;
+        if (String(v).toLowerCase().includes(query)) return true;
+      }
+      // Search inside items
+      for (const item of event.items) {
+        for (const [k, v] of Object.entries(item)) {
+          if (k.toLowerCase().includes(query)) return true;
+          if (String(v).toLowerCase().includes(query)) return true;
+        }
+      }
+      return false;
+    });
+  }, [bundle.events, searchQuery]);
+
+  const handleToggleEvent = (eventIndex: number) => {
+    setOpenStates((prev) => {
+      const current = prev[eventIndex] ?? defaultAllOpen;
+      return { ...prev, [eventIndex]: !current };
+    });
+  };
+
+  const handleToggleAll = (expand: boolean) => {
+    setDefaultAllOpen(expand);
+    const nextStates: Record<number, boolean> = {};
+    bundle.events.forEach((_, idx) => {
+      nextStates[idx] = expand;
+    });
+    setOpenStates(nextStates);
+  };
 
   return (
     <article className="analytics-bundle">
       <header className="analytics-bundle-header">
         <div>
-          <p className="eyebrow">Bundle {index + 1}</p>
+          <p className="eyebrow">Bundle #{index + 1}</p>
           <h3>{title}</h3>
         </div>
-        <span>{bundle.events.length} events</span>
+        <span className="bundle-events-pill">
+          {bundle.events.length} {bundle.events.length === 1 ? "event" : "events"}
+        </span>
       </header>
 
       <BundleMetadata bundle={bundle} />
 
-      <details className="analytics-property-section">
-        <summary>
-          User properties <span>{Object.keys(bundle.userProperties).length}</span>
-        </summary>
-        <ObjectTable
-          values={bundle.userProperties}
-          emptyMessage="No user properties were decoded."
-        />
-      </details>
+      {Object.keys(bundle.userProperties).length > 0 ? (
+        <details className="analytics-property-section">
+          <summary>
+            User properties ({Object.keys(bundle.userProperties).length})
+          </summary>
+          <ObjectTable
+            values={bundle.userProperties}
+            emptyMessage="No user properties were decoded."
+          />
+        </details>
+      ) : null}
 
-      <details className="analytics-property-section">
-        <summary>
-          Consent <span>{Object.keys(bundle.consent).length}</span>
-        </summary>
-        <ObjectTable
-          values={bundle.consent}
-          emptyMessage="No consent state was decoded."
-        />
-      </details>
+      {Object.keys(bundle.consent).length > 0 ? (
+        <details className="analytics-property-section">
+          <summary>
+            Consent ({Object.keys(bundle.consent).length})
+          </summary>
+          <ObjectTable
+            values={bundle.consent}
+            emptyMessage="No consent state was decoded."
+          />
+        </details>
+      ) : null}
 
       {bundle.events.length ? (
-        <div className="analytics-events">
-          {bundle.events.map((event, eventIndex) => (
-            <EventCard
-              event={event}
-              index={eventIndex}
-              key={`${event.name}:${eventIndex}`}
-            />
-          ))}
+        <div className="analytics-events-container">
+          <div className="analytics-events-toolbar">
+            <div className="events-search-wrap">
+              <input
+                type="search"
+                className="events-search-input"
+                placeholder="Search events by name or parameter (e.g. view_item, Tai nghe)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setSearchQuery("")}
+                >
+                  ✕
+                </button>
+              ) : null}
+            </div>
+
+            <div className="events-actions-wrap">
+              <span className="events-counter-badge">
+                {filteredEvents.length === bundle.events.length
+                  ? `${bundle.events.length} events`
+                  : `${filteredEvents.length} of ${bundle.events.length} events`}
+              </span>
+              <button
+                type="button"
+                className="action-pill-btn"
+                onClick={() => handleToggleAll(true)}
+              >
+                Expand all
+              </button>
+              <button
+                type="button"
+                className="action-pill-btn"
+                onClick={() => handleToggleAll(false)}
+              >
+                Collapse all
+              </button>
+            </div>
+          </div>
+
+          {filteredEvents.length > 0 ? (
+            <div className="analytics-events-list">
+              {filteredEvents.map((event) => {
+                const originalIndex = bundle.events.indexOf(event);
+                const isCardOpen =
+                  openStates[originalIndex] ?? defaultAllOpen;
+
+                return (
+                  <EventCard
+                    event={event}
+                    index={originalIndex}
+                    isOpen={isCardOpen}
+                    onToggle={() => handleToggleEvent(originalIndex)}
+                    key={`${event.name}:${originalIndex}`}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <p className="analytics-empty-inline search-no-results">
+              No events matched &ldquo;{searchQuery}&rdquo;.
+            </p>
+          )}
         </div>
       ) : (
         <p className="analytics-empty-inline">
@@ -196,6 +501,13 @@ export function AnalyticsPanel({ analysis }: AnalyticsPanelProps) {
   const normalizedStatus = analysis.status.toLowerCase();
   const unavailable = ["unsupported", "failed", "error"].includes(
     normalizedStatus,
+  );
+
+  // Filter out harmless internal schema notices
+  const visibleWarnings = analysis.warnings.filter(
+    (w) =>
+      !w.includes("bundle contains unsupported field") &&
+      !w.includes("App identifiers and versions are omitted"),
   );
 
   return (
@@ -233,11 +545,11 @@ export function AnalyticsPanel({ analysis }: AnalyticsPanelProps) {
         </div>
       ) : null}
 
-      {analysis.warnings.length ? (
+      {visibleWarnings.length ? (
         <section className="analytics-warnings" role="status">
           <strong>Decoder warnings</strong>
           <ul>
-            {analysis.warnings.map((warning, index) => (
+            {visibleWarnings.map((warning, index) => (
               <li key={`${warning}:${index}`}>{warning}</li>
             ))}
           </ul>
