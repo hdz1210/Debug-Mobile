@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.5] - 2026-08-15
+
+### Added
+
+- Export selected or all captured network requests to standard HAR 1.2
+  archives (`.har`) compatible with Chrome DevTools, Postman, and Charles.
+- Multi-selection checkboxes in the network table with per-row selection and a
+  master header checkbox supporting indeterminate state.
+- Preserve duplicate request and response headers, query parameters, text and
+  Base64 payloads/responses, timings, errors, WebSocket frames, and Firebase
+  Analytics metadata during HAR export.
+
 ## [0.1.4] - 2026-08-15
 
 ### Added

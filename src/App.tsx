@@ -17,10 +17,12 @@ import {
   resumeCapture,
   revealCertificate,
   revealDiagnosticLog,
+  saveNetworkArchive,
   startCapture,
   stopCapture,
 } from "./lib/ipc";
 import { flowMatchesSearch } from "./lib/flow-search";
+import { serializeHar, suggestHarFileName } from "./lib/har-export";
 import { useFlowStore } from "./stores/flow-store";
 import type {
   CertificateStatus,
@@ -72,6 +74,10 @@ function App() {
   const [isCertificateOpen, setIsCertificateOpen] = useState(false);
   const [isCertificateBusy, setIsCertificateBusy] = useState(false);
   const [certificateError, setCertificateError] = useState<string | null>(null);
+  const [checkedFlowIds, setCheckedFlowIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [isExporting, setIsExporting] = useState(false);
 
   const refreshNetworkInfo = useCallback(async () => {
     setIsScanningNetwork(true);
@@ -132,12 +138,15 @@ function App() {
     };
   }, [bindMode, refreshNetworkInfo]);
 
+  const orderedFlows = useMemo(
+    () => orderedFlowIds.map((flowId) => flowsById[flowId]),
+    [flowsById, orderedFlowIds],
+  );
+
   const visibleFlows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return orderedFlowIds
-      .map((flowId) => flowsById[flowId])
-      .filter((flow) => flowMatchesSearch(flow, query));
-  }, [flowsById, orderedFlowIds, searchQuery]);
+    return orderedFlows.filter((flow) => flowMatchesSearch(flow, query));
+  }, [orderedFlows, searchQuery]);
 
   const selectedFlow = selectedFlowId
     ? (flowsById[selectedFlowId] ?? null)
@@ -163,6 +172,7 @@ function App() {
     setIsBusy(true);
     setActionError(null);
     setViewingSession(null);
+    setCheckedFlowIds(new Set());
     clearFlows();
     try {
       setCapture(await startCapture(config));
@@ -267,6 +277,70 @@ function App() {
     }
   };
 
+  const handleClear = () => {
+    setCheckedFlowIds(new Set());
+    clearFlows();
+  };
+
+  const handleOpenHistory = () => {
+    setCheckedFlowIds(new Set());
+    setIsHistoryOpen(true);
+  };
+
+  const handleToggleChecked = (flowId: string) => {
+    setCheckedFlowIds((current) => {
+      const next = new Set(current);
+      if (next.has(flowId)) {
+        next.delete(flowId);
+      } else {
+        next.add(flowId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleAllVisible = () => {
+    setCheckedFlowIds((current) => {
+      const next = new Set(current);
+      const allVisibleChecked =
+        visibleFlows.length > 0 &&
+        visibleFlows.every((flow) => next.has(flow.id));
+      visibleFlows.forEach((flow) => {
+        if (allVisibleChecked) {
+          next.delete(flow.id);
+        } else {
+          next.add(flow.id);
+        }
+      });
+      return next;
+    });
+  };
+
+  const handleExport = async (scope: "selected" | "all") => {
+    const flowsToExport =
+      scope === "selected"
+        ? orderedFlows.filter((flow) => checkedFlowIds.has(flow.id))
+        : orderedFlows;
+    if (flowsToExport.length === 0) {
+      return;
+    }
+
+    setIsExporting(true);
+    setActionError(null);
+    try {
+      const exportedAt = new Date();
+      const content = serializeHar(flowsToExport, exportedAt);
+      await saveNetworkArchive(
+        content,
+        suggestHarFileName(scope, exportedAt),
+      );
+    } catch (error) {
+      setActionError(readableError(error));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const statusMessage = actionError ?? capture.message ?? backendWarning;
 
   return (
@@ -279,12 +353,12 @@ function App() {
         port={port}
         searchQuery={searchQuery}
         onBindModeChange={setBindMode}
-        onClear={clearFlows}
+        onClear={handleClear}
         onCertificate={() => {
           setIsCertificateOpen(true);
           void refreshCertificateStatus();
         }}
-        onHistory={() => setIsHistoryOpen(true)}
+        onHistory={handleOpenHistory}
         onOpenLogs={() => void handleOpenLogs()}
         onPause={() => void handlePause()}
         onPortChange={(nextPort) => {
@@ -338,9 +412,16 @@ function App() {
 
       <section className="workspace">
         <NetworkTable
+          checkedFlowIds={checkedFlowIds}
           flows={visibleFlows}
+          isExporting={isExporting}
           selectedFlowId={selectedFlowId}
+          totalFlowCount={orderedFlows.length}
+          onExportAll={() => void handleExport("all")}
+          onExportSelected={() => void handleExport("selected")}
           onSelect={setSelectedFlowId}
+          onToggleAllVisible={handleToggleAllVisible}
+          onToggleChecked={handleToggleChecked}
         />
         <RequestDetails key={selectedFlow?.id ?? "empty"} flow={selectedFlow} />
       </section>
@@ -366,6 +447,7 @@ function App() {
         onClose={() => setIsHistoryOpen(false)}
         onOpenSession={async (session: SessionSummary) => {
           setActionError(null);
+          setCheckedFlowIds(new Set());
           try {
             const events = await loadSessionEvents(session.id);
             clearFlows();

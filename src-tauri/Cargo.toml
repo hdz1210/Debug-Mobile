@@ -1,6 +1,6 @@
 [package]
 name = "app-network-debugger"
-version = "0.1.4"
+version = "0.1.5"
 description = "A desktop HTTP, HTTPS, and WebSocket debugger powered by mitmproxy"
 authors = ["hdz1210"]
 edition = "2024"

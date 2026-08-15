@@ -374,6 +374,20 @@ select:focus-visible {
   font-size: 0.9rem;
 }
 
+.network-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.network-export-actions .button {
+  min-height: 1.9rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
 .table-scroll {
   min-height: 0;
   flex: 1;
@@ -386,6 +400,10 @@ table {
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 0.75rem;
+}
+
+.request-list table {
+  min-width: 48rem;
 }
 
 th {
@@ -402,25 +420,29 @@ th {
   text-transform: uppercase;
 }
 
-th:nth-child(1) {
+.request-list th:nth-child(1) {
+  width: 2.5rem;
+}
+
+.request-list th:nth-child(2) {
   width: 5rem;
 }
 
-th:nth-child(2) {
+.request-list th:nth-child(3) {
   width: 28%;
 }
 
-th:nth-child(3) {
+.request-list th:nth-child(4) {
   width: 22%;
 }
 
-th:nth-child(4) {
+.request-list th:nth-child(5) {
   width: 5.5rem;
 }
 
-th:nth-child(5),
-th:nth-child(6),
-th:nth-child(7) {
+.request-list th:nth-child(6),
+.request-list th:nth-child(7),
+.request-list th:nth-child(8) {
   width: 5.5rem;
 }
 
@@ -431,6 +453,27 @@ td {
   color: #b7c0ca;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selection-column,
+.selection-cell {
+  padding-right: 0.25rem;
+  padding-left: 0.25rem;
+  text-align: center;
+}
+
+.selection-column input,
+.selection-cell input {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin: 0;
+  accent-color: #1f6feb;
+  cursor: pointer;
+}
+
+.selection-column input:disabled,
+.selection-cell input:disabled {
+  cursor: not-allowed;
 }
 
 tbody tr:not(:has(.empty-state)) {

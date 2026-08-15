@@ -95,6 +95,27 @@ export async function saveCapturedBody(
   return true;
 }
 
+export async function saveNetworkArchive(
+  content: string,
+  suggestedFileName: string,
+): Promise<boolean> {
+  const path = await save({
+    title: "Save network archive",
+    defaultPath: suggestedFileName,
+    filters: [{ name: "HTTP Archive (.har)", extensions: ["har"] }],
+  });
+  if (!path) {
+    return false;
+  }
+
+  await invoke("save_captured_body", {
+    path,
+    data: content,
+    format: "text",
+  });
+  return true;
+}
+
 export function listSessions(): Promise<SessionSummary[]> {
   return invoke("list_sessions");
 }
