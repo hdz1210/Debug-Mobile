@@ -108,8 +108,9 @@ Automatically unpacks binary Protobuf streams into color-coded event cards, hero
 1. **Connect to Same Wi-Fi**: Ensure your mobile device and computer are on the same Wi-Fi network.
 2. **Start Capture**: Open App Network Debugger, choose **LAN devices**, and click **Start capture**.
 3. **Set Mobile Proxy**: In your phone's Wi-Fi settings, set **Proxy** to **Manual**. Enter the **Host / IP** and **Port** (`8080`) shown on the desktop app.
-4. **Install Certificate**: Click **Certificate** on desktop and scan the QR code (or open `http://mitm.it` in mobile browser) to install the CA certificate.  
-   *(On iOS: Go to Settings → General → About → Certificate Trust Settings and enable full trust).*
+4. **Install Certificate**: Click **Certificate** on desktop and scan the QR code (or open `http://mitm.it` in mobile Safari) to install the CA certificate.
+   - **Step 4a (Install Profile)**: Open **Settings → VPN & Device Management** (or *Profile Downloaded*) → select **mitmproxy** → tap **Install**.
+   - **Step 4b (Enable Full Trust)**: Open **Settings → General → About → Certificate Trust Settings** → toggle **Enable Full Trust for Root Certificates** for **mitmproxy**.
 5. **Inspect Live Traffic**: Open the mobile app you want to test and watch requests and analytics stream in!
 
 ---

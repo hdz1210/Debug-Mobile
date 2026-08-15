@@ -132,11 +132,13 @@ export function CertificatePanel({
               <ol>
                 <li>Start the proxy and set the phone Wi-Fi proxy to this desktop.</li>
                 <li>
-                  Scan this QR code or open <code>{status?.installUrl ?? "http://mitm.it"}</code>.
+                  Scan this QR code or open <code>{status?.installUrl ?? "http://mitm.it"}</code> in Safari.
                 </li>
-                <li>Install the Apple certificate profile.</li>
                 <li>
-                  In Certificate Trust Settings, enable full trust for mitmproxy.
+                  Open <strong>Settings → VPN &amp; Device Management</strong> and tap <strong>Install</strong> on the mitmproxy profile.
+                </li>
+                <li>
+                  Open <strong>Settings → General → About → Certificate Trust Settings</strong> and enable <strong>Full Trust</strong> for mitmproxy.
                 </li>
               </ol>
               {!proxyActive ? (
