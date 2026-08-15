@@ -16,6 +16,35 @@ body,
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #30363d #0d1117;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2b323c;
+  border-radius: 4px;
+  border: 2px solid #0d1117;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #58a6ff;
+}
+
+::-webkit-scrollbar-corner {
+  background: #0d1117;
 }
 
 body {
@@ -341,8 +370,44 @@ select:focus-visible {
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(35rem, 1.6fr) minmax(20rem, 1fr);
   overflow: hidden;
+  position: relative;
+}
+
+.workspace.is-resizing {
+  user-select: none;
+}
+
+.workspace-resizer {
+  position: relative;
+  width: 6px;
+  background: #21262d;
+  cursor: col-resize;
+  transition: background 0.15s ease;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-resizer::after {
+  content: "";
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background: #484f58;
+  transition: background 0.15s ease, height 0.15s ease;
+}
+
+.workspace-resizer:hover,
+.workspace-resizer.resizing {
+  background: #1f6feb;
+}
+
+.workspace-resizer:hover::after,
+.workspace-resizer.resizing::after {
+  background: #ffffff;
+  height: 52px;
 }
 
 .request-list,
@@ -356,7 +421,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid #30363d;
+  border-right: 0;
 }
 
 .panel-heading {

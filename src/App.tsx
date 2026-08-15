@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { CaptureToolbar } from "./components/capture-toolbar/CaptureToolbar";
 import { CertificatePanel } from "./components/certificate-panel/CertificatePanel";
@@ -78,6 +78,72 @@ function App() {
     () => new Set(),
   );
   const [isExporting, setIsExporting] = useState(false);
+
+  const [splitPercent, setSplitPercent] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("appdbg:split-percent.v1");
+      if (saved) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= 20 && parsed <= 80) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+    return 55;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const workspaceRef = useRef<HTMLElement | null>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!workspaceRef.current) return;
+      const rect = workspaceRef.current.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const currentX = e.clientX - rect.left;
+      const newPercent = (currentX / rect.width) * 100;
+      const clamped = Math.max(20, Math.min(80, newPercent));
+      setSplitPercent(clamped);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      try {
+        localStorage.setItem("appdbg:split-percent.v1", String(splitPercent));
+      } catch {
+        // Ignore
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isResizing, splitPercent]);
+
+  const handleResetSplit = () => {
+    setSplitPercent(55);
+    try {
+      localStorage.setItem("appdbg:split-percent.v1", "55");
+    } catch {
+      // Ignore
+    }
+  };
 
   const refreshNetworkInfo = useCallback(async () => {
     setIsScanningNetwork(true);
@@ -410,7 +476,13 @@ function App() {
         </div>
       ) : null}
 
-      <section className="workspace">
+      <section
+        className={`workspace ${isResizing ? "is-resizing" : ""}`}
+        ref={workspaceRef}
+        style={{
+          gridTemplateColumns: `${splitPercent}% 6px calc(${100 - splitPercent}% - 6px)`,
+        }}
+      >
         <NetworkTable
           checkedFlowIds={checkedFlowIds}
           flows={visibleFlows}
@@ -422,6 +494,14 @@ function App() {
           onSelect={setSelectedFlowId}
           onToggleAllVisible={handleToggleAllVisible}
           onToggleChecked={handleToggleChecked}
+        />
+        <div
+          className={`workspace-resizer ${isResizing ? "resizing" : ""}`}
+          onMouseDown={handleMouseDown}
+          onDoubleClick={handleResetSplit}
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize panels (Double-click to reset)"
         />
         <RequestDetails key={selectedFlow?.id ?? "empty"} flow={selectedFlow} />
       </section>
