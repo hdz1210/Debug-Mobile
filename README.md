@@ -22,8 +22,8 @@
 ---
 
 <img
-  src="./docs/assets/app-network-debugger.png"
-  alt="App Network Debugger capturing requests from a mobile device"
+  src="./docs/assets/analytics-inspector.png"
+  alt="App Network Debugger capturing and decoding Firebase Analytics events"
   width="100%"
 />
 
@@ -38,6 +38,32 @@
 | 📦 **HAR 1.2 Export & Replay** | 🛡️ **Privacy & Local-First** |
 | :--- | :--- |
 | • **Standard HAR 1.2 Format**: Export selected or all captured flows into `.har` archives.<br>• **Tool Interoperability**: Re-open exported archives in **Chrome DevTools**, **Postman**, or **Charles**.<br>• **Session History**: Automatically persists captured sessions locally in SQLite to review past debugging sessions.<br>• **Full Fidelity**: Preserves duplicate headers, query strings, Base64 payloads, timings, and WebSocket frames. | • **Automatic Redaction**: Mask passwords, bearer tokens, cookies, and sensitive headers before displaying or exporting.<br>• **100% Local**: No captured packets or mobile analytics are ever transmitted to any third-party cloud servers.<br>• **Standalone Desktop App**: Everything is bundled into a single desktop package—no separate Python or mitmproxy installations required. |
+
+---
+
+## Interface Showcase
+
+### 🌐 Network Traffic & Headers Inspection
+Inspect complete HTTP/HTTPS requests, status codes, query strings, headers, and timing in real time.
+
+<p align="center">
+  <img
+    src="./docs/assets/network-inspector.png"
+    alt="Inspect HTTP/HTTPS request headers and payloads"
+    width="100%"
+  />
+</p>
+
+### ⚡ Native Firebase Analytics Decoding
+Automatically unpacks binary Protobuf streams into color-coded event cards, hero parameter chips, and structured e-commerce items.
+
+<p align="center">
+  <img
+    src="./docs/assets/analytics-inspector.png"
+    alt="Firebase Analytics Protobuf decoding with event cards and items breakdown"
+    width="100%"
+  />
+</p>
 
 ---
 
