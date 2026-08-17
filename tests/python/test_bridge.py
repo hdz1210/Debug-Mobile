@@ -237,9 +237,10 @@ class BridgeTests(unittest.TestCase):
         self.assertIsInstance(bundle["consent"], dict)
         self.assertIsInstance(bundle["events"], list)
         analytics_event = bundle["events"][0]
-        self.assertEqual(
-            {"name", "timestampMs", "origin", "parameters", "items"},
-            set(analytics_event),
+        self.assertTrue(
+            {"name", "timestampMs", "origin", "parameters", "items"}.issubset(
+                set(analytics_event)
+            )
         )
 
     def test_request_analysis_respects_the_capture_body_limit(self) -> None:

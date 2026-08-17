@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { AnalyticsWorkspace } from "./components/analytics/AnalyticsWorkspace";
 import { CaptureToolbar } from "./components/capture-toolbar/CaptureToolbar";
 import { CertificatePanel } from "./components/certificate-panel/CertificatePanel";
 import { ConsentDialog } from "./components/consent-dialog/ConsentDialog";
 import { HistoryPanel } from "./components/history-panel/HistoryPanel";
-import { LanProxyBanner } from "./components/lan-proxy-banner/LanProxyBanner";
 import { NetworkTable } from "./components/network-table/NetworkTable";
 import { RequestDetails } from "./components/request-details/RequestDetails";
 import { useBackendEvents } from "./hooks/use-backend-events";
@@ -59,8 +59,31 @@ function App() {
   const setSearchQuery = useFlowStore((state) => state.setSearchQuery);
   const clearFlows = useFlowStore((state) => state.clearFlows);
 
-  const [bindMode, setBindMode] = useState<"local" | "lan">("local");
-  const [port, setPort] = useState(8080);
+  const [bindMode, setBindMode] = useState<"local" | "lan">(() => {
+    try {
+      const saved = localStorage.getItem("appdbg:bind-mode.v1");
+      if (saved === "local" || saved === "lan") {
+        return saved;
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+    return "lan";
+  });
+  const [port, setPort] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("appdbg:port.v1");
+      if (saved) {
+        const p = parseInt(saved, 10);
+        if (!isNaN(p) && p >= 1 && p <= 65535) {
+          return p;
+        }
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+    return 8080;
+  });
   const [isBusy, setIsBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isConsentOpen, setIsConsentOpen] = useState(false);
@@ -78,6 +101,7 @@ function App() {
     () => new Set(),
   );
   const [isExporting, setIsExporting] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<"network" | "firebase" | "branch" | "all">("network");
 
   const [splitPercent, setSplitPercent] = useState<number>(() => {
     try {
@@ -407,55 +431,69 @@ function App() {
     }
   };
 
-  const statusMessage = actionError ?? capture.message ?? backendWarning;
+  const analyticsCounts = useMemo(() => {
+    let firebaseCount = 0;
+    let branchCount = 0;
+    for (const flow of orderedFlows) {
+      if (!flow.analysis?.bundles) continue;
+      const pid = flow.analysis.providerId;
+      for (const b of flow.analysis.bundles) {
+        if (pid === "branch") {
+          branchCount += b.events.length;
+        } else {
+          firebaseCount += b.events.length;
+        }
+      }
+    }
+    return { firebaseCount, branchCount };
+  }, [orderedFlows]);
+
+  const statusMessage = actionError ?? capture.message ?? backendWarning ?? networkInfoError;
 
   return (
     <main className="network-app">
       <CaptureToolbar
+        analyticsCounts={analyticsCounts}
         bindMode={bindMode}
         capture={capture}
         certificateNeedsAttention={certificateNeedsAttention}
         isBusy={isBusy}
+        isScanningNetwork={isScanningNetwork}
+        networkInfo={networkInfo}
         port={port}
         searchQuery={searchQuery}
-        onBindModeChange={setBindMode}
-        onClear={handleClear}
+        totalFlowCount={orderedFlows.length}
+        workspaceView={workspaceView}
+        onBindModeChange={(mode) => {
+          setBindMode(mode);
+          try {
+            localStorage.setItem("appdbg:bind-mode.v1", mode);
+          } catch {}
+        }}
         onCertificate={() => {
           setIsCertificateOpen(true);
           void refreshCertificateStatus();
         }}
+        onClear={handleClear}
         onHistory={handleOpenHistory}
         onOpenLogs={() => void handleOpenLogs()}
         onPause={() => void handlePause()}
         onPortChange={(nextPort) => {
           if (Number.isFinite(nextPort)) {
-            setPort(Math.min(65535, Math.max(1, Math.round(nextPort))));
+            const clamped = Math.min(65535, Math.max(1, Math.round(nextPort)));
+            setPort(clamped);
+            try {
+              localStorage.setItem("appdbg:port.v1", String(clamped));
+            } catch {}
           }
         }}
-        onSearchChange={setSearchQuery}
+        onRefreshNetwork={() => void refreshNetworkInfo()}
         onResume={() => void handleResume()}
+        onSearchChange={setSearchQuery}
         onStart={handleStart}
         onStop={() => void handleStop()}
+        onWorkspaceViewChange={setWorkspaceView}
       />
-
-      {bindMode === "lan" ? (
-        <>
-          <LanProxyBanner
-            capture={capture}
-            isScanning={isScanningNetwork}
-            networkError={networkInfoError}
-            networkInfo={networkInfo}
-            port={proxyActive ? capture.port : port}
-            onRefresh={() => void refreshNetworkInfo()}
-          />
-          {!proxyActive ? (
-            <div className="notice notice-warning" role="status">
-              LAN mode exposes the proxy to devices on this network. Use it only
-              on a trusted network.
-            </div>
-          ) : null}
-        </>
-      ) : null}
 
       {statusMessage ? (
         <div className="notice notice-error notice-with-action" role="alert">
@@ -476,35 +514,44 @@ function App() {
         </div>
       ) : null}
 
-      <section
-        className={`workspace ${isResizing ? "is-resizing" : ""}`}
-        ref={workspaceRef}
-        style={{
-          gridTemplateColumns: `${splitPercent}% 6px calc(${100 - splitPercent}% - 6px)`,
-        }}
-      >
-        <NetworkTable
-          checkedFlowIds={checkedFlowIds}
-          flows={visibleFlows}
-          isExporting={isExporting}
-          selectedFlowId={selectedFlowId}
-          totalFlowCount={orderedFlows.length}
-          onExportAll={() => void handleExport("all")}
-          onExportSelected={() => void handleExport("selected")}
-          onSelect={setSelectedFlowId}
-          onToggleAllVisible={handleToggleAllVisible}
-          onToggleChecked={handleToggleChecked}
+      {workspaceView === "network" ? (
+        <section
+          className={`workspace ${isResizing ? "is-resizing" : ""}`}
+          ref={workspaceRef}
+          style={{
+            gridTemplateColumns: `${splitPercent}% 6px calc(${100 - splitPercent}% - 6px)`,
+          }}
+        >
+          <NetworkTable
+            checkedFlowIds={checkedFlowIds}
+            flows={visibleFlows}
+            isExporting={isExporting}
+            selectedFlowId={selectedFlowId}
+            totalFlowCount={orderedFlows.length}
+            onExportAll={() => void handleExport("all")}
+            onExportSelected={() => void handleExport("selected")}
+            onSelect={setSelectedFlowId}
+            onToggleAllVisible={handleToggleAllVisible}
+            onToggleChecked={handleToggleChecked}
+          />
+          <div
+            className={`workspace-resizer ${isResizing ? "resizing" : ""}`}
+            onMouseDown={handleMouseDown}
+            onDoubleClick={handleResetSplit}
+            role="separator"
+            aria-orientation="vertical"
+            title="Drag to resize panels (Double-click to reset)"
+          />
+          <RequestDetails key={selectedFlow?.id ?? "empty"} flow={selectedFlow} />
+        </section>
+      ) : (
+        <AnalyticsWorkspace
+          activeProvider={workspaceView}
+          flows={orderedFlows}
+          onClearFlows={handleClear}
+          onSelectProvider={(p) => setWorkspaceView(p)}
         />
-        <div
-          className={`workspace-resizer ${isResizing ? "resizing" : ""}`}
-          onMouseDown={handleMouseDown}
-          onDoubleClick={handleResetSplit}
-          role="separator"
-          aria-orientation="vertical"
-          title="Drag to resize panels (Double-click to reset)"
-        />
-        <RequestDetails key={selectedFlow?.id ?? "empty"} flow={selectedFlow} />
-      </section>
+      )}
 
       <ConsentDialog
         open={isConsentOpen}

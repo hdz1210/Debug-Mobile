@@ -330,38 +330,289 @@ def _decode_user_property(
     return name, redact_pair(name, values[-1], redact_sensitive)
 
 
+_SYSTEM_PARAM_PREFIXES = ("_o", "_sc", "_si", "_sn", "_sno", "_sid", "_lte", "_se", "_previousTimestampMs", "firebase_")
+
+
+def _is_system_param(name: str) -> bool:
+    return name in {
+        "_o",
+        "_sc",
+        "_si",
+        "_sn",
+        "_sno",
+        "_sid",
+        "_lte",
+        "_se",
+        "_fi",
+        "_fot",
+        "_id",
+        "_previousTimestampMs",
+        "firebase_event_origin",
+        "firebase_screen",
+        "firebase_screen_class",
+        "firebase_screen_id",
+    } or name.startswith("_") or name.startswith("firebase_")
+
+
 def _decode_bundle(
-    data: bytes, warnings: list[str], redact_sensitive: bool, platform: str
+    data: bytes, warnings: list[str], redact_sensitive: bool, default_platform: str
 ) -> dict[str, Any]:
     fields = decode_message(data)
     events: list[dict[str, Any]] = []
     user_properties: dict[str, Any] = {}
     consent: dict[str, Any] = {}
+    shared: dict[str, Any] = {}
+
+    protocol_version: int | None = None
+    upload_timestamp_millis: int | None = None
+    resettable_device_id: str | None = None
+    device_model: str | None = None
+    os_version: str | None = None
+    app_version: str | None = None
+    gmp_version: int | None = None
+    app_store: str | None = None
+    gmp_app_id: str | None = None
+    app_id: str | None = None
+    app_instance_id: str | None = None
+    firebase_instance_id: str | None = None
+    bundle_sequential_index: int | None = None
+    bundle_platform: str | None = None
+    user_default_language: str | None = None
+    time_zone_offset_minutes: int | None = None
+    start_timestamp_millis: int | None = None
+    end_timestamp_millis: int | None = None
+    prev_bundle_start_timestamp_millis: int | None = None
+    prev_bundle_end_timestamp_millis: int | None = None
+    app_version_major: int | None = None
+    app_version_minor: int | None = None
+    app_version_patch: int | None = None
+    ad_services_version: int | None = None
+    consent_signals: str | None = None
+    dynamite_version: int | None = None
+    delivery_index: int | None = None
+    batching_timestamp_millis: int | None = None
+    config_version: int | None = None
+
+    def _scalar(field: WireField) -> Any:
+        if field.wire_type == 0 and isinstance(field.value, int):
+            return field.value
+        if field.wire_type == 2 and isinstance(field.value, bytes):
+            try:
+                return field.value.decode("utf-8")
+            except UnicodeDecodeError:
+                return field.value.hex()
+        if field.wire_type == 1 and isinstance(field.value, bytes) and len(field.value) == 8:
+            try:
+                return struct.unpack("<d", field.value)[0]
+            except Exception:
+                return field.value.hex()
+        if field.wire_type == 5 and isinstance(field.value, bytes) and len(field.value) == 4:
+            try:
+                return struct.unpack("<f", field.value)[0]
+            except Exception:
+                return field.value.hex()
+        return str(field.value)
 
     for field in fields:
-        if field.number not in {2, 3}:
-            continue
-        if field.wire_type != 2 or not isinstance(field.value, bytes):
-            _warn(warnings, f"bundle field {field.number} has an unexpected wire type")
-            continue
+        num = field.number
         try:
-            if field.number == 2:
-                event = _decode_event(field.value, warnings, redact_sensitive)
-                if event is not None:
-                    events.append(event)
-                    _collect_consent(event["parameters"], consent)
-            else:
-                user_property = _decode_user_property(
-                    field.value, warnings, redact_sensitive
-                )
-                if user_property is not None:
-                    _add_value(user_properties, *user_property)
+            if num == 1:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    protocol_version = val
+            elif num == 2:
+                if field.wire_type == 2 and isinstance(field.value, bytes):
+                    event = _decode_event(field.value, warnings, redact_sensitive)
+                    if event is not None:
+                        events.append(event)
+                        _collect_consent(event["parameters"], consent)
+            elif num == 3:
+                if field.wire_type == 2 and isinstance(field.value, bytes):
+                    user_property = _decode_user_property(
+                        field.value, warnings, redact_sensitive
+                    )
+                    if user_property is not None:
+                        _add_value(user_properties, *user_property)
+            elif num == 4:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    upload_timestamp_millis = val
+            elif num == 5:
+                resettable_device_id = str(_scalar(field))
+            elif num == 6:
+                device_model = str(_scalar(field))
+            elif num == 7:
+                os_version = str(_scalar(field))
+            elif num == 8:
+                app_version = str(_scalar(field))
+            elif num == 9:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    gmp_version = val
+                else:
+                    try:
+                        gmp_version = int(str(val))
+                    except (ValueError, TypeError):
+                        pass
+            elif num == 10:
+                app_store = str(_scalar(field))
+            elif num == 11:
+                gmp_app_id = str(_scalar(field))
+            elif num == 12:
+                app_id = str(_scalar(field))
+            elif num == 13:
+                app_instance_id = str(_scalar(field))
+            elif num == 14:
+                firebase_instance_id = str(_scalar(field))
+            elif num == 16:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    bundle_sequential_index = val
+            elif num == 17:
+                bundle_platform = str(_scalar(field))
+            elif num == 18:
+                user_default_language = str(_scalar(field))
+            elif num == 19:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    time_zone_offset_minutes = val
+            elif num == 21:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    start_timestamp_millis = val
+            elif num == 22:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    end_timestamp_millis = val
+            elif num == 23:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    prev_bundle_start_timestamp_millis = val
+            elif num == 24:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    prev_bundle_end_timestamp_millis = val
+            elif num == 25:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    app_version_major = val
+            elif num == 26:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    app_version_minor = val
+            elif num == 27:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    app_version_patch = val
+            elif num == 28:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    ad_services_version = val
+            elif num == 30:
+                consent_signals = str(_scalar(field))
+            elif num == 34:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    dynamite_version = val
+            elif num == 39:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    delivery_index = val
+            elif num == 42:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    batching_timestamp_millis = val
+            elif num == 43:
+                val = _scalar(field)
+                if isinstance(val, int):
+                    config_version = val
         except ProtobufDecodeError as error:
             _warn(warnings, f"could not decode bundle field {field.number}: {error}")
 
+    resolved_platform = bundle_platform or default_platform
+    if consent_signals:
+        consent["consent_signals"] = consent_signals
+
+    # Extract session ID and session number from user properties or events
+    session_id = (
+        user_properties.get("ga_session_id")
+        or user_properties.get("firebase_session_id")
+        or user_properties.get("_sid")
+    )
+    session_num = (
+        user_properties.get("ga_session_number")
+        or user_properties.get("firebase_session_number")
+        or user_properties.get("_sno")
+    )
+
+    # Populate shared metadata dictionary
+    def _set_shared(key: str, val: Any) -> None:
+        if val is not None:
+            shared[key] = val
+
+    _set_shared("protocol_version", protocol_version)
+    _set_shared("ad_services_version", ad_services_version)
+    _set_shared("app_id", app_id)
+    _set_shared("app_instance_id", app_instance_id)
+    _set_shared("app_store", app_store)
+    _set_shared("app_version", app_version)
+    _set_shared("app_version_major", app_version_major)
+    _set_shared("app_version_minor", app_version_minor)
+    _set_shared("app_version_patch", app_version_patch)
+    _set_shared("batching_timestamp_millis", batching_timestamp_millis)
+    _set_shared("bundle_sequential_index", bundle_sequential_index)
+    _set_shared("config_version", config_version)
+    _set_shared("delivery_index", delivery_index)
+    _set_shared("device_model", device_model)
+    _set_shared("dynamite_version", dynamite_version)
+    _set_shared("end_timestamp_millis", end_timestamp_millis)
+    _set_shared("firebase_instance_id", firebase_instance_id)
+    _set_shared("gmp_app_id", gmp_app_id)
+    _set_shared("gmp_version", gmp_version)
+    _set_shared("os_version", os_version)
+    _set_shared("platform", resolved_platform)
+    _set_shared("resettable_device_id", resettable_device_id)
+    _set_shared("start_timestamp_millis", start_timestamp_millis)
+    _set_shared("time_zone_offset_minutes", time_zone_offset_minutes)
+    _set_shared("upload_timestamp_millis", upload_timestamp_millis)
+    _set_shared("user_default_language", user_default_language)
+    _set_shared("previous_bundle_start_timestamp_millis", prev_bundle_start_timestamp_millis)
+    _set_shared("previous_bundle_end_timestamp_millis", prev_bundle_end_timestamp_millis)
+    _set_shared("consent_signals", consent_signals)
+
+    # Attach bundle context and system parameters to each event
+    for event in events:
+        event["appId"] = app_id
+        ev_params = event.get("parameters", {})
+        ev_session_id = ev_params.get("_sid") or ev_params.get("ga_session_id") or session_id
+        ev_session_num = ev_params.get("_sno") or ev_params.get("ga_session_number") or session_num
+        if ev_session_id is not None:
+            event["sessionId"] = ev_session_id
+        if ev_session_num is not None:
+            event["sessionNum"] = ev_session_num
+
+        # Separate system parameters
+        system_params: dict[str, Any] = {}
+        for p_key, p_val in ev_params.items():
+            if _is_system_param(p_key):
+                system_params[p_key] = p_val
+        event["systemParameters"] = system_params
+        event["userProperties"] = user_properties
+
     _collect_consent(user_properties, consent)
     return {
-        "platform": platform,
+        "appId": app_id,
+        "appInstanceId": app_instance_id,
+        "firebaseInstanceId": firebase_instance_id,
+        "gmpAppId": gmp_app_id,
+        "gmpVersion": gmp_version,
+        "appVersion": app_version,
+        "platform": resolved_platform,
+        "osVersion": os_version,
+        "deviceModel": device_model,
+        "sessionId": session_id,
+        "sessionNum": session_num,
+        "shared": shared,
         "userProperties": user_properties,
         "consent": consent,
         "events": events,

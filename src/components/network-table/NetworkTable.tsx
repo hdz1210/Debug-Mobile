@@ -153,7 +153,9 @@ export function NetworkTable({
                       }
                     />
                   </td>
-                  <td className="method">{flow.method ?? "—"}</td>
+                  <td className="method" data-method={flow.method ?? ""}>
+                    {flow.method ?? "—"}
+                  </td>
                   <td className="request-name" title={flow.url}>
                     <div className="request-name-content">
                       <span>{flow.path ?? flow.url ?? flow.id}</span>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .branch import decode_branch_payload
 from .classifier import EndpointMatch, classify_endpoint, is_firebase_native_url
 from .firebase_native import decode_firebase_native
 from .google_analytics import decode_google_analytics
@@ -44,6 +45,10 @@ def analyze_request(
     try:
         if match.protocol == "firebase-native-protobuf":
             status, platform, bundles, warnings = decode_firebase_native(
+                content, url, redact_sensitive
+            )
+        elif match.protocol == "branch-json":
+            status, platform, bundles, warnings = decode_branch_payload(
                 content, url, redact_sensitive
             )
         else:

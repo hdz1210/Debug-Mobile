@@ -24,6 +24,11 @@ _FIREBASE_LOGGING_HOSTS = (
     "firebaselogging-pa.googleapis.com",
     "crashlyticsreports-pa.googleapis.com",
 )
+_BRANCH_HOSTS = (
+    "branch.io",
+    "app.link",
+    "bnc.lt",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +152,20 @@ def classify_endpoint(url: str, content: bytes = b"") -> EndpointMatch | None:
             tags=("firebase", "crashlytics", "crash-reporting"),
             analytics=False,
         )
+
+    if _matches_domain(host, _BRANCH_HOSTS):
+        branch_paths = ("/v1/open", "/v1/install", "/v1/event", "/v2/event", "/v1/pageview", "/v1/profile")
+        if any(path.startswith(prefix) for prefix in branch_paths):
+            return EndpointMatch(
+                provider_id="branch",
+                provider_label="Branch",
+                service_id="analytics",
+                service_label="Attribution & Analytics",
+                protocol="branch-json",
+                confidence=0.99,
+                tags=("branch", "attribution", "analytics", "deep-linking"),
+                analytics=True,
+            )
 
     if not _matches_domain(host, _GOOGLE_ANALYTICS_HOSTS):
         return None

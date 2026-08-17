@@ -288,7 +288,9 @@ export function RequestDetails({ flow }: RequestDetailsProps) {
   return (
     <aside className="request-details">
       <div className="details-header">
-        <p className="eyebrow">{flow.method ?? "Request"}</p>
+        <p className="eyebrow" data-method={flow.method ?? ""}>
+          {flow.method ?? "Request"}
+        </p>
         <h2 title={flow.url}>{flow.path ?? flow.url ?? flow.id}</h2>
       </div>
       <nav className="detail-tabs" aria-label="Request detail sections">

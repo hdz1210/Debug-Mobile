@@ -1,4 +1,10 @@
-import type { CaptureStatusSnapshot } from "../../types/events";
+import { useState } from "react";
+import type {
+  CaptureStatusSnapshot,
+  NetworkInfo,
+} from "../../types/events";
+
+export type WorkspaceView = "network" | "firebase" | "branch" | "all";
 
 type CaptureToolbarProps = {
   bindMode: "local" | "lan";
@@ -7,6 +13,12 @@ type CaptureToolbarProps = {
   isBusy: boolean;
   port: number;
   searchQuery: string;
+  networkInfo: NetworkInfo | null;
+  isScanningNetwork?: boolean;
+  workspaceView: WorkspaceView;
+  analyticsCounts: { firebaseCount: number; branchCount: number };
+  totalFlowCount: number;
+  onWorkspaceViewChange: (view: WorkspaceView) => void;
   onBindModeChange: (mode: "local" | "lan") => void;
   onClear: () => void;
   onCertificate: () => void;
@@ -18,6 +30,7 @@ type CaptureToolbarProps = {
   onResume: () => void;
   onStart: () => void;
   onStop: () => void;
+  onRefreshNetwork?: () => void;
 };
 
 export function CaptureToolbar({
@@ -27,6 +40,12 @@ export function CaptureToolbar({
   isBusy,
   port,
   searchQuery,
+  networkInfo,
+  isScanningNetwork = false,
+  workspaceView,
+  analyticsCounts,
+  totalFlowCount,
+  onWorkspaceViewChange,
   onBindModeChange,
   onClear,
   onCertificate,
@@ -38,7 +57,10 @@ export function CaptureToolbar({
   onResume,
   onStart,
   onStop,
+  onRefreshNetwork,
 }: CaptureToolbarProps) {
+  const [copiedIp, setCopiedIp] = useState(false);
+
   const isProxyActive = [
     "starting",
     "running",
@@ -50,111 +72,246 @@ export function CaptureToolbar({
   const canPause = capture.status === "running";
   const canResume = capture.status === "paused";
 
+  const lanIp = networkInfo?.recommendedAddress ?? null;
+  const currentTargetAddress =
+    bindMode === "lan" && lanIp
+      ? `${lanIp}:${isProxyActive ? capture.port : port}`
+      : `127.0.0.1:${isProxyActive ? capture.port : port}`;
+
+  const handleCopyIp = async () => {
+    if (!lanIp) return;
+    try {
+      await navigator.clipboard.writeText(lanIp);
+      setCopiedIp(true);
+      setTimeout(() => setCopiedIp(false), 1800);
+    } catch {
+      // Ignore clipboard error
+    }
+  };
+
   return (
-    <header className="toolbar">
-      <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          A
-        </span>
-        <div>
-          <h1>App Network Debugger</h1>
-          <p>
-            <span className="status-dot" data-status={capture.status} />
-            {capture.status}
-            {isProxyActive
-              ? ` · ${capture.host}:${capture.port}`
-              : ""}
-          </p>
+    <header className="app-unified-toolbar">
+      {/* Top Row: Brand, Workspace Tabs, Utility Actions */}
+      <div className="toolbar-top-row">
+        {/* Brand & Status */}
+        <div className="brand-section">
+          <div className="brand-icon" aria-hidden="true">
+            <span>A</span>
+          </div>
+          <div className="brand-titles">
+            <h1 className="brand-name">App Network Debugger</h1>
+            <div className="brand-status-pill">
+              <span className="status-dot" data-status={capture.status} />
+              <span className="status-text">
+                {capture.status === "running"
+                  ? "Running"
+                  : capture.status === "paused"
+                    ? "Paused"
+                    : "Idle"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Workspaces / Segmented Control Tabs */}
+        <nav className="workspace-tabs-segmented" aria-label="Workspaces">
+          <button
+            className={`segmented-tab ${workspaceView === "network" ? "active" : ""}`}
+            type="button"
+            onClick={() => onWorkspaceViewChange("network")}
+          >
+            <span>🌐 Network Traffic</span>
+            <span className="seg-count">{totalFlowCount}</span>
+          </button>
+          <button
+            className={`segmented-tab ${workspaceView === "firebase" ? "active" : ""}`}
+            type="button"
+            onClick={() => onWorkspaceViewChange("firebase")}
+          >
+            <span>🔥 Firebase</span>
+            {analyticsCounts.firebaseCount > 0 && (
+              <span className="seg-count highlight-fire">
+                {analyticsCounts.firebaseCount}
+              </span>
+            )}
+          </button>
+          <button
+            className={`segmented-tab ${workspaceView === "branch" ? "active" : ""}`}
+            type="button"
+            onClick={() => onWorkspaceViewChange("branch")}
+          >
+            <span>✈️ Branch</span>
+            {analyticsCounts.branchCount > 0 && (
+              <span className="seg-count highlight-branch">
+                {analyticsCounts.branchCount}
+              </span>
+            )}
+          </button>
+        </nav>
+
+        {/* Right: Proxy Config & Utilities */}
+        <div className="toolbar-utilities">
+          <div className="proxy-quick-config">
+            <label className="config-label">
+              <span>BIND</span>
+              <select
+                className="config-select"
+                disabled={isProxyActive}
+                value={bindMode}
+                onChange={(e) =>
+                  onBindModeChange(e.target.value as "local" | "lan")
+                }
+              >
+                <option value="lan">LAN devices</option>
+                <option value="local">Local only</option>
+              </select>
+            </label>
+
+            <label className="config-label">
+              <span>PORT</span>
+              <input
+                className="config-port-input"
+                disabled={isProxyActive}
+                max={65535}
+                min={1}
+                type="number"
+                value={port}
+                onChange={(e) => onPortChange(e.target.valueAsNumber)}
+              />
+            </label>
+          </div>
+
+          <div className="utility-buttons">
+            <button
+              className="button button-subtle certificate-btn"
+              data-attention={certificateNeedsAttention}
+              title="View and install CA Certificate on mobile device"
+              type="button"
+              onClick={onCertificate}
+            >
+              <span className="btn-icon">🔐</span>
+              <span>Certificate</span>
+            </button>
+            <button
+              className="button button-subtle"
+              disabled={isProxyActive}
+              title="View saved capture history"
+              type="button"
+              onClick={onHistory}
+            >
+              <span className="btn-icon">🕒</span>
+              <span>History</span>
+            </button>
+            <button
+              className="button button-subtle"
+              title="Open diagnostic logs"
+              type="button"
+              onClick={onOpenLogs}
+            >
+              <span className="btn-icon">📄</span>
+              <span>Logs</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="capture-actions">
-        <button
-          className="button button-primary"
-          type="button"
-          disabled={isBusy || isProxyActive}
-          onClick={onStart}
-        >
-          Start capture
-        </button>
-        <button
-          className="button"
-          type="button"
-          disabled={isBusy || (!canPause && !canResume)}
-          onClick={canResume ? onResume : onPause}
-        >
-          {canResume ? "Resume capture" : "Pause capture"}
-        </button>
-        <button
-          className="button"
-          type="button"
-          title="Stops the proxy. A phone still configured to use it may lose Internet access."
-          disabled={isBusy || (!canPause && !canResume)}
-          onClick={onStop}
-        >
-          Stop
-        </button>
-        <button className="button" type="button" onClick={onClear}>
-          Clear
-        </button>
-        <button
-          className="button"
-          type="button"
-          disabled={isProxyActive}
-          onClick={onHistory}
-        >
-          History
-        </button>
-        <button className="button" type="button" onClick={onOpenLogs}>
-          Logs
-        </button>
-        <button
-          className="button certificate-button"
-          data-attention={certificateNeedsAttention}
-          type="button"
-          onClick={onCertificate}
-        >
-          Certificate
-        </button>
-      </div>
+      {/* Bottom Row: Capture Actions, Live Mobile IP Card, Search */}
+      <div className="toolbar-bottom-row">
+        {/* Left: Capture Actions */}
+        <div className="capture-control-group">
+          {!isProxyActive ? (
+            <button
+              className="button button-primary start-btn"
+              disabled={isBusy}
+              type="button"
+              onClick={onStart}
+            >
+              ▶ Start capture
+            </button>
+          ) : (
+            <>
+              <button
+                className={`button ${canResume ? "button-primary" : "button-warning"}`}
+                disabled={isBusy || (!canPause && !canResume)}
+                type="button"
+                onClick={canResume ? onResume : onPause}
+              >
+                {canResume ? "▶ Resume" : "⏸ Pause"}
+              </button>
+              <button
+                className="button button-danger stop-btn"
+                disabled={isBusy}
+                title="Stop the proxy"
+                type="button"
+                onClick={onStop}
+              >
+                ⏹ Stop
+              </button>
+            </>
+          )}
 
-      <div className="proxy-settings">
-        <label>
-          <span>Bind</span>
-          <select
-            value={bindMode}
-            disabled={isProxyActive}
-            onChange={(event) =>
-              onBindModeChange(event.target.value as "local" | "lan")
-            }
+          <button
+            className="button button-subtle clear-btn"
+            title="Clear all recorded requests"
+            type="button"
+            onClick={onClear}
           >
-            <option value="local">Local only</option>
-            <option value="lan">LAN devices</option>
-          </select>
-        </label>
-        <label>
-          <span>Port</span>
-          <input
-            className="port-input"
-            type="number"
-            min={1}
-            max={65535}
-            value={port}
-            disabled={isProxyActive}
-            onChange={(event) => onPortChange(event.target.valueAsNumber)}
-          />
-        </label>
-      </div>
+            🗑 Clear
+          </button>
+        </div>
 
-      <label className="search-box">
-        <span className="visually-hidden">Search requests</span>
-        <input
-          type="search"
-          value={searchQuery}
-          placeholder="Search URL, domain, method, status…"
-          onChange={(event) => onSearchChange(event.target.value)}
-        />
-      </label>
+        {/* Center: Live Mobile Proxy IP badge */}
+        <div className="mobile-ip-badge-container">
+          {bindMode === "lan" ? (
+            <div className="mobile-ip-badge" title="Configure your phone Wi-Fi proxy to this IP and Port">
+              <span className="badge-icon">📱</span>
+              <span className="badge-label">Phone Wi-Fi Proxy:</span>
+              <strong className="badge-ip">{currentTargetAddress}</strong>
+              {lanIp && (
+                <button
+                  className="badge-copy-btn"
+                  title="Copy IP Address"
+                  type="button"
+                  onClick={handleCopyIp}
+                >
+                  {copiedIp ? "✓ Copied" : "Copy IP"}
+                </button>
+              )}
+              {onRefreshNetwork && (
+                <button
+                  className="badge-refresh-btn"
+                  disabled={isScanningNetwork}
+                  title="Scan for network changes"
+                  type="button"
+                  onClick={onRefreshNetwork}
+                >
+                  {isScanningNetwork ? "…" : "🔄"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="mobile-ip-badge local-badge">
+              <span className="badge-icon">💻</span>
+              <span className="badge-label">Local Proxy:</span>
+              <strong className="badge-ip">{currentTargetAddress}</strong>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Search Box */}
+        <div className="search-box-wrapper">
+          <label className="search-input-container">
+            <span className="search-icon">🔍</span>
+            <input
+              className="global-search-input"
+              placeholder="Search URL, path, method, status…"
+              type="search"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
+          </label>
+        </div>
+      </div>
     </header>
   );
 }

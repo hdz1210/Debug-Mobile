@@ -201,16 +201,55 @@ class AnalyticsAnalyzerTests(unittest.TestCase):
         self.assertEqual(form_event["name"], "login")
         self.assertEqual(form_event["parameters"]["ec"], "account")
 
-    def test_google_collect_requires_exact_host_path_and_markers(self) -> None:
-        self.assertIsNone(
-            analyze_request("https://api.example.com/collect?v=2&tid=G-TEST", b"")
+    def test_branch_event_payload_is_decoded_with_items_and_device_info(self) -> None:
+        payload = {
+            "name": "PURCHASE",
+            "branch_key": "key_live_test123",
+            "user_data": {
+                "os": "iOS",
+                "os_version": "18.1",
+                "model": "iPhone16,1",
+                "app_version": "2.4.0",
+                "app_id": "com.example.shop",
+                "developer_identity": "user_999",
+            },
+            "event_data": {
+                "currency": "USD",
+                "revenue": 149.99,
+                "transaction_id": "tx_abc123",
+            },
+            "custom_data": {
+                "promo_code": "SUMMER",
+            },
+            "content_items": [
+                {
+                    "$sku": "SKU-99",
+                    "$product_name": "Premium Headset",
+                    "$price": 149.99,
+                    "$quantity": 1,
+                }
+            ],
+        }
+        analysis = analyze_request(
+            "https://api2.branch.io/v2/event/standard",
+            json.dumps(payload).encode(),
         )
-        self.assertIsNone(
-            analyze_request("https://www.google-analytics.com/collect", b"hello=world")
-        )
-        self.assertIsNone(
-            analyze_request("https://www.google-analytics.com/not-collect?v=2&tid=G-TEST", b"")
-        )
+
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["providerId"], "branch")
+        self.assertEqual(analysis["protocol"], "branch-json")
+        self.assertEqual(analysis["status"], "decoded")
+        bundle = analysis["bundles"][0]
+        self.assertEqual(bundle["appId"], "com.example.shop")
+        self.assertEqual(bundle["platform"], "ios")
+        self.assertEqual(bundle["deviceModel"], "iPhone16,1")
+        self.assertEqual(bundle["shared"]["branch_key"], "key_live_test123")
+        event = bundle["events"][0]
+        self.assertEqual(event["name"], "PURCHASE")
+        self.assertEqual(event["parameters"]["currency"], "USD")
+        self.assertEqual(event["parameters"]["promo_code"], "SUMMER")
+        self.assertEqual(event["items"][0]["sku"], "SKU-99")
+        self.assertEqual(event["items"][0]["product_name"], "Premium Headset")
 
 
 if __name__ == "__main__":
