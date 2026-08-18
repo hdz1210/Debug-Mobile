@@ -3,7 +3,7 @@ import type { FlowAnalysisBundle, FlowAnalysisEvent, NetworkFlow } from "../../t
 import { ObjectTreeViewer } from "./ObjectTreeViewer";
 
 type ViewMode = "flat" | "batch" | "screen";
-type ProviderTab = "firebase" | "branch" | "all";
+export type ProviderTab = "firebase" | "branch" | "all";
 
 type FlattenedEvent = {
   id: string;
@@ -43,23 +43,9 @@ const SYSTEM_KEYS = new Set([
   "firebase_screen_id",
 ]);
 
-const USER_PROP_TAGS: Record<string, string> = {
-  first_open_after_install: "_fi",
-  first_open_time: "_fot",
-  user_id: "_id",
-  member_id: "_id",
-  firebase_session_id: "_sid",
-  ga_session_id: "_sid",
-  firebase_session_number: "_sno",
-  ga_session_number: "_sno",
-  lifetime_user_engagement: "_lte",
-  session_user_engagement: "_se",
-};
-
 export function AnalyticsWorkspace({
   flows,
   activeProvider,
-  onSelectProvider,
   onClearFlows,
 }: AnalyticsWorkspaceProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("flat");
@@ -129,49 +115,43 @@ export function AnalyticsWorkspace({
     return list;
   }, [flows]);
 
-  // Filter events based on active provider and search query
+  // Filter events by activeProvider and search
   const filteredEvents = useMemo(() => {
     return allFlattenedEvents.filter((item) => {
       // Provider filter
-      if (activeProvider === "firebase" && item.providerId !== "firebase" && item.providerId !== "google-analytics") {
+      if (activeProvider === "firebase" && item.providerId !== "firebase" && item.providerId !== "firebase-native" && item.providerId !== "measurement-protocol") {
         return false;
       }
-      if (activeProvider === "branch" && item.providerId !== "branch") {
+      if (activeProvider === "branch" && item.providerId !== "branch" && item.providerId !== "branch-json") {
         return false;
       }
 
-      // Search query filter
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase().trim();
+      // Text search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const evName = item.event.name.toLowerCase();
+        const screen = item.screenName.toLowerCase();
+        const appId = (item.bundle.appId || "").toLowerCase();
+        const paramsMatch = Object.entries(item.event.parameters || {}).some(
+          ([k, v]) =>
+            k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q),
+        );
+        return evName.includes(q) || screen.includes(q) || appId.includes(q) || paramsMatch;
+      }
 
-      const evNameMatch = item.event.name.toLowerCase().includes(q);
-      const appIdMatch = (item.bundle.appId || "").toLowerCase().includes(q);
-      const screenMatch = item.screenName.toLowerCase().includes(q);
-
-      const paramsMatch = Object.entries(item.event.parameters || {}).some(
-        ([k, v]) =>
-          k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q),
-      );
-
-      const userPropsMatch = Object.entries(item.bundle.userProperties || {}).some(
-        ([k, v]) =>
-          k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q),
-      );
-
-      return evNameMatch || appIdMatch || screenMatch || paramsMatch || userPropsMatch;
+      return true;
     });
   }, [allFlattenedEvents, activeProvider, searchQuery]);
 
-  // Selected event resolution
+  // Currently selected event
   const selectedEvent = useMemo(() => {
-    if (selectedEventId) {
-      const found = filteredEvents.find((e) => e.id === selectedEventId);
-      if (found) return found;
+    if (!selectedEventId) {
+      return filteredEvents[0] || null;
     }
-    return filteredEvents.length > 0 ? filteredEvents[filteredEvents.length - 1] : null;
+    return filteredEvents.find((e) => e.id === selectedEventId) || filteredEvents[0] || null;
   }, [filteredEvents, selectedEventId]);
 
-  // Grouping for Batch and Screen modes
+  // Grouped by Batch (Flow)
   const groupedBatches = useMemo(() => {
     const map = new Map<string, FlattenedEvent[]>();
     for (const item of filteredEvents) {
@@ -187,6 +167,7 @@ export function AnalyticsWorkspace({
     }));
   }, [filteredEvents]);
 
+  // Grouped by Screen
   const groupedScreens = useMemo(() => {
     const map = new Map<string, FlattenedEvent[]>();
     for (const item of filteredEvents) {
@@ -287,94 +268,72 @@ export function AnalyticsWorkspace({
 
   return (
     <div className="analytics-workspace-root">
-      {/* Top Provider Bar */}
-      <div className="analytics-nav-bar">
-        <div className="analytics-provider-tabs">
-          <button
-            className={`provider-tab-btn ${activeProvider === "firebase" ? "active" : ""}`}
-            type="button"
-            onClick={() => onSelectProvider?.("firebase")}
-          >
-            <span className="tab-icon">🔥</span>
-            <span>FIREBASE</span>
-          </button>
-          <button
-            className={`provider-tab-btn ${activeProvider === "branch" ? "active" : ""}`}
-            type="button"
-            onClick={() => onSelectProvider?.("branch")}
-          >
-            <span className="tab-icon">✈️</span>
-            <span>BRANCH</span>
-          </button>
-          <button
-            className={`provider-tab-btn ${activeProvider === "all" ? "active" : ""}`}
-            type="button"
-            onClick={() => onSelectProvider?.("all")}
-          >
-            <span>ALL EVENTS</span>
-          </button>
-        </div>
-
-        <div className="analytics-nav-actions">
-          <button
-            className="action-icon-btn"
-            title="Copy all filtered events JSON"
-            type="button"
-            onClick={handleExportAllJson}
-          >
-            {copiedKey === "export-all" ? "✓ Copied" : "📋 Copy All"}
-          </button>
-          {onClearFlows && (
-            <button
-              className="action-icon-btn"
-              title="Clear all events"
-              type="button"
-              onClick={onClearFlows}
-            >
-              🗑️ Clear
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Main Workspace Split Layout */}
       <div className="analytics-body-layout">
         {/* Left Sidebar: Filter, Modes & Event Stream */}
         <aside className="analytics-sidebar">
-          <div className="sidebar-filter-box">
-            <input
-              className="sidebar-search-input"
-              placeholder="Filter — app:... e:..."
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          {/* Header Controls */}
+          <div className="sidebar-header-bar">
+            <div className="sidebar-filter-box">
+              <span className="search-icon">🔍</span>
+              <input
+                className="sidebar-search-input"
+                placeholder="Filter events, params, app ID…"
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div className="sidebar-actions-row">
+              <div className="view-mode-bar">
+                <button
+                  className={`mode-btn ${viewMode === "flat" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setViewMode("flat")}
+                >
+                  Flat
+                </button>
+                <button
+                  className={`mode-btn ${viewMode === "batch" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setViewMode("batch")}
+                >
+                  Batch
+                </button>
+                <button
+                  className={`mode-btn ${viewMode === "screen" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setViewMode("screen")}
+                >
+                  Screen
+                </button>
+              </div>
+
+              <div className="sidebar-util-btns">
+                <button
+                  className="sidebar-util-btn"
+                  title="Copy all events JSON"
+                  type="button"
+                  onClick={handleExportAllJson}
+                >
+                  {copiedKey === "export-all" ? "✓" : "📋"}
+                </button>
+                {onClearFlows && (
+                  <button
+                    className="sidebar-util-btn"
+                    title="Clear all events"
+                    type="button"
+                    onClick={onClearFlows}
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="view-mode-bar">
-            <button
-              className={`mode-btn ${viewMode === "flat" ? "active" : ""}`}
-              type="button"
-              onClick={() => setViewMode("flat")}
-            >
-              Flat
-            </button>
-            <button
-              className={`mode-btn ${viewMode === "batch" ? "active" : ""}`}
-              type="button"
-              onClick={() => setViewMode("batch")}
-            >
-              Batch
-            </button>
-            <button
-              className={`mode-btn ${viewMode === "screen" ? "active" : ""}`}
-              type="button"
-              onClick={() => setViewMode("screen")}
-            >
-              Screen
-            </button>
-          </div>
-
+          {/* Events Stream List */}
           <div className="events-stream-list">
             {filteredEvents.length === 0 ? (
               <div className="empty-stream-notice">
@@ -597,20 +556,13 @@ export function AnalyticsWorkspace({
                         <tbody>
                           {userPropertiesList.map(([k, v]) => (
                             <tr key={k}>
-                              <td className="prop-key-cell">
-                                <span>{k}</span>
-                              </td>
+                              <td className="prop-key-cell">{k}</td>
                               <td
                                 className="prop-val-cell clickable-copy"
                                 title="Click to copy"
                                 onClick={() => handleCopy(String(v), k)}
                               >
                                 <span>{String(v)}</span>
-                                {USER_PROP_TAGS[k] && (
-                                  <span className="prop-tag-badge">
-                                    {USER_PROP_TAGS[k]}
-                                  </span>
-                                )}
                                 {copiedKey === k ? (
                                   <span className="copy-check">✓ Copied</span>
                                 ) : null}
@@ -624,41 +576,39 @@ export function AnalyticsWorkspace({
                 )}
               </div>
 
-              {/* Accordion 3: Ecommerce Items */}
-              <div className="accordion-section">
-                <div
-                  className="accordion-header"
-                  onClick={() => toggleSection("ecommerce")}
-                >
-                  <span className="accordion-title">
-                    Ecommerce ({selectedEvent.event.items?.length || 0})
-                  </span>
-                  <span className="accordion-toggle-icon">
-                    {openSections.ecommerce ? "▲" : "▼"}
-                  </span>
-                </div>
-                {openSections.ecommerce && (
-                  <div className="accordion-content">
-                    {(!selectedEvent.event.items || selectedEvent.event.items.length === 0) ? (
-                      <div className="empty-subtab-notice">
-                        No ecommerce items attached to this event.
-                      </div>
-                    ) : (
-                      <div className="ecommerce-items-stack">
+              {/* Accordion 3: Ecommerce Items (if any) */}
+              {selectedEvent.event.items && selectedEvent.event.items.length > 0 && (
+                <div className="accordion-section">
+                  <div
+                    className="accordion-header"
+                    onClick={() => toggleSection("ecommerce")}
+                  >
+                    <span className="accordion-title">
+                      Ecommerce Items ({selectedEvent.event.items.length})
+                    </span>
+                    <span className="accordion-toggle-icon">
+                      {openSections.ecommerce ? "▲" : "▼"}
+                    </span>
+                  </div>
+                  {openSections.ecommerce && (
+                    <div className="accordion-content">
+                      <div className="ecommerce-items-container">
                         {selectedEvent.event.items.map((item, iIdx) => (
                           <div key={iIdx} className="ecommerce-item-card">
-                            <div className="item-card-title">Item #{iIdx + 1}</div>
+                            <div className="item-card-header">
+                              <strong>
+                                #{iIdx + 1} {String(item.item_name || item.name || "Item")}
+                              </strong>
+                              {item.item_id ? (
+                                <code>{String(item.item_id)}</code>
+                              ) : null}
+                            </div>
                             <table className="analytics-prop-table">
                               <tbody>
-                                {Object.entries(item).map(([ik, iv]) => (
-                                  <tr key={ik}>
-                                    <td className="prop-key-cell">{ik}</td>
-                                    <td
-                                      className="prop-val-cell clickable-copy"
-                                      onClick={() => handleCopy(String(iv), `${iIdx}-${ik}`)}
-                                    >
-                                      <span>{String(iv)}</span>
-                                    </td>
+                                {Object.entries(item).map(([k, v]) => (
+                                  <tr key={k}>
+                                    <td className="prop-key-cell">{k}</td>
+                                    <td className="prop-val-cell">{String(v)}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -666,77 +616,39 @@ export function AnalyticsWorkspace({
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Accordion 4: Consent & Privacy */}
-              <div className="accordion-section">
-                <div
-                  className="accordion-header"
-                  onClick={() => toggleSection("consent")}
-                >
-                  <span className="accordion-title">
-                    Consent & Privacy ({Object.keys(selectedEvent.bundle.consent || {}).length})
-                  </span>
-                  <span className="accordion-toggle-icon">
-                    {openSections.consent ? "▲" : "▼"}
-                  </span>
+                    </div>
+                  )}
                 </div>
-                {openSections.consent && (
-                  <div className="accordion-content">
-                    {Object.keys(selectedEvent.bundle.consent || {}).length === 0 ? (
-                      <div className="empty-subtab-notice">
-                        No consent signals recorded.
-                      </div>
-                    ) : (
+              )}
+
+              {/* Accordion 4: Shared Metadata (30) */}
+              {sharedMetadataList.length > 0 && (
+                <div className="accordion-section">
+                  <div
+                    className="accordion-header"
+                    onClick={() => toggleSection("shared")}
+                  >
+                    <span className="accordion-title">
+                      Shared Device &amp; Bundle Metadata ({sharedMetadataList.length})
+                    </span>
+                    <span className="accordion-toggle-icon">
+                      {openSections.shared ? "▲" : "▼"}
+                    </span>
+                  </div>
+                  {openSections.shared && (
+                    <div className="accordion-content">
                       <table className="analytics-prop-table">
                         <tbody>
-                          {Object.entries(selectedEvent.bundle.consent || {}).map(([ck, cv]) => (
-                            <tr key={ck}>
-                              <td className="prop-key-cell">{ck}</td>
-                              <td className="prop-val-cell">{String(cv)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Accordion 5: Shared (30) Device & Bundle Metadata */}
-              <div className="accordion-section">
-                <div
-                  className="accordion-header"
-                  onClick={() => toggleSection("shared")}
-                >
-                  <span className="accordion-title">
-                    Shared ({sharedMetadataList.length})
-                  </span>
-                  <span className="accordion-toggle-icon">
-                    {openSections.shared ? "▲" : "▼"}
-                  </span>
-                </div>
-                {openSections.shared && (
-                  <div className="accordion-content">
-                    {sharedMetadataList.length === 0 ? (
-                      <div className="empty-subtab-notice">
-                        No shared bundle metadata recorded.
-                      </div>
-                    ) : (
-                      <table className="analytics-prop-table">
-                        <tbody>
-                          {sharedMetadataList.map(([sk, sv]) => (
-                            <tr key={sk}>
-                              <td className="prop-key-cell">{sk}</td>
+                          {sharedMetadataList.map(([k, v]) => (
+                            <tr key={k}>
+                              <td className="prop-key-cell">{k}</td>
                               <td
                                 className="prop-val-cell clickable-copy"
-                                onClick={() => handleCopy(String(sv), `shared-${sk}`)}
+                                title="Click to copy"
+                                onClick={() => handleCopy(String(v), k)}
                               >
-                                <span>{String(sv)}</span>
-                                {copiedKey === `shared-${sk}` ? (
+                                <span>{String(v)}</span>
+                                {copiedKey === k ? (
                                   <span className="copy-check">✓ Copied</span>
                                 ) : null}
                               </td>
@@ -744,68 +656,38 @@ export function AnalyticsWorkspace({
                           ))}
                         </tbody>
                       </table>
-                    )}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {/* Accordion 6: Raw Interactive Object Tree */}
+              {/* Accordion 5: Raw Event Tree Viewer */}
               <div className="accordion-section">
                 <div
                   className="accordion-header"
                   onClick={() => toggleSection("raw")}
                 >
-                  <div className="header-left-title">
-                    <span className="accordion-title">Raw</span>
-                  </div>
-                  <div
-                    className="header-right-controls"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className="raw-copy-btn"
-                      title="Copy raw JSON"
-                      type="button"
-                      onClick={() =>
-                        handleCopy(
-                          JSON.stringify(
-                            {
-                              event: selectedEvent.event,
-                              bundle: selectedEvent.bundle,
-                            },
-                            null,
-                            2,
-                          ),
-                          "raw-json",
-                        )
-                      }
-                    >
-                      {copiedKey === "raw-json" ? "✓ Copied" : "≡"}
-                    </button>
-                    <span className="accordion-toggle-icon">
-                      {openSections.raw ? "▲" : "▼"}
-                    </span>
-                  </div>
+                  <span className="accordion-title">Raw Object Tree</span>
+                  <span className="accordion-toggle-icon">
+                    {openSections.raw ? "▲" : "▼"}
+                  </span>
                 </div>
                 {openSections.raw && (
-                  <div className="accordion-content raw-tree-container">
-                    <ObjectTreeViewer
-                      data={{
-                        event: selectedEvent.event,
-                        bundle: selectedEvent.bundle,
-                      }}
-                    />
+                  <div className="accordion-content">
+                    <div className="object-tree-root">
+                      <ObjectTreeViewer data={selectedEvent.event} label="event" />
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           ) : (
             <div className="no-event-selected-placeholder">
-              <div className="placeholder-icon">📊</div>
+              <span className="placeholder-icon">📊</span>
               <h3>No Analytics Event Selected</h3>
               <p>
-                Capture or select an analytics request to inspect events, parameters,
-                and device metadata in detail.
+                Capture or select an analytics request to inspect events,
+                parameters, and device metadata in detail.
               </p>
             </div>
           )}
