@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.7] - 2026-08-26
+
+### Added
+
+- Dedicated full-featured **Analytics Workspace** with real-time event aggregation, event parameter breakdown, and interactive object tree inspection.
+- Native decoding for **Branch.io** attribution payloads (`/v1/open`, `/v1/install`, `/v1/event`, `/v2/event`, `/v1/pageview`, `/v1/profile`) with device metadata, event parameters, and content item breakdown.
+- Draggable and resizable split-pane layout for comfortable inspection of network traffic and payloads.
+- Dark theme styling improvements with customized slim scrollbars and responsive control toolbar.
+
+### Changed
+
+- Enhanced Firebase Protobuf wire decoding and error resilience.
+- Improved certificate guidance with direct links to iOS VPN & Device Management and Trust Settings.
+
 ## [0.1.6] - 2026-08-15
 
 ### Changed

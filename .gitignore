@@ -44,3 +44,4 @@ src-tauri/release-resources/
 *.njsproj
 *.sln
 *.sw?
+release-artifacts/

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import struct
 from dataclasses import dataclass
 from typing import Any
@@ -330,7 +331,18 @@ def _decode_user_property(
     return name, redact_pair(name, values[-1], redact_sensitive)
 
 
-_SYSTEM_PARAM_PREFIXES = ("_o", "_sc", "_si", "_sn", "_sno", "_sid", "_lte", "_se", "_previousTimestampMs", "firebase_")
+_SYSTEM_PARAM_PREFIXES = (
+    "_o",
+    "_sc",
+    "_si",
+    "_sn",
+    "_sno",
+    "_sid",
+    "_lte",
+    "_se",
+    "_previousTimestampMs",
+    "firebase_",
+)
 
 
 def _is_system_param(name: str) -> bool:
@@ -450,10 +462,8 @@ def _decode_bundle(
                 if isinstance(val, int):
                     gmp_version = val
                 else:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         gmp_version = int(str(val))
-                    except (ValueError, TypeError):
-                        pass
             elif num == 10:
                 app_store = str(_scalar(field))
             elif num == 11:

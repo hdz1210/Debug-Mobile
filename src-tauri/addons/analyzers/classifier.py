@@ -154,7 +154,14 @@ def classify_endpoint(url: str, content: bytes = b"") -> EndpointMatch | None:
         )
 
     if _matches_domain(host, _BRANCH_HOSTS):
-        branch_paths = ("/v1/open", "/v1/install", "/v1/event", "/v2/event", "/v1/pageview", "/v1/profile")
+        branch_paths = (
+            "/v1/open",
+            "/v1/install",
+            "/v1/event",
+            "/v2/event",
+            "/v1/pageview",
+            "/v1/profile",
+        )
         if any(path.startswith(prefix) for prefix in branch_paths):
             return EndpointMatch(
                 provider_id="branch",

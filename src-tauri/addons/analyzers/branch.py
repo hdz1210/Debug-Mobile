@@ -13,10 +13,15 @@ def is_branch_url(url: str) -> bool:
     if not (host.endswith("branch.io") or host.endswith("app.link") or host.endswith("bnc.lt")):
         return False
     path = parsed.path.lower()
-    return any(
-        path.startswith(prefix)
-        for prefix in ("/v1/open", "/v1/install", "/v1/event", "/v2/event", "/v1/pageview", "/v1/profile")
+    branch_prefixes = (
+        "/v1/open",
+        "/v1/install",
+        "/v1/event",
+        "/v2/event",
+        "/v1/pageview",
+        "/v1/profile",
     )
+    return any(path.startswith(prefix) for prefix in branch_prefixes)
 
 
 def decode_branch_payload(
@@ -51,14 +56,18 @@ def decode_branch_payload(
     user_data = data.get("user_data", {}) if isinstance(data.get("user_data"), dict) else {}
     custom_data = data.get("custom_data", {}) if isinstance(data.get("custom_data"), dict) else {}
     event_data = data.get("event_data", {}) if isinstance(data.get("event_data"), dict) else {}
-    content_items = data.get("content_items", []) if isinstance(data.get("content_items"), list) else []
+    content_items = (
+        data.get("content_items", []) if isinstance(data.get("content_items"), list) else []
+    )
 
     platform = str(user_data.get("os", data.get("os", "mobile"))).lower()
     device_model = str(user_data.get("model", data.get("hardware_id", "")))
     os_version = str(user_data.get("os_version", data.get("os_version", "")))
     app_version = str(user_data.get("app_version", data.get("app_version", "")))
     app_id = str(user_data.get("app_id", data.get("app_id", "")))
-    developer_identity = str(user_data.get("developer_identity", data.get("developer_identity", "")))
+    developer_identity = str(
+        user_data.get("developer_identity", data.get("developer_identity", ""))
+    )
 
     # Build event parameters
     parameters: dict[str, Any] = {}
@@ -69,10 +78,17 @@ def decode_branch_payload(
 
     # If no event_data/custom_data, copy top-level keys
     if not parameters:
+        ignored_keys = {
+            "user_data",
+            "custom_data",
+            "event_data",
+            "content_items",
+            "branch_key",
+            "name",
+        }
         for k, v in data.items():
-            if k not in {"user_data", "custom_data", "event_data", "content_items", "branch_key", "name"}:
-                if isinstance(v, (str, int, float, bool)):
-                    parameters[str(k)] = redact_pair(str(k), v, redact_sensitive)
+            if k not in ignored_keys and isinstance(v, (str, int, float, bool)):
+                parameters[str(k)] = redact_pair(str(k), v, redact_sensitive)
 
     # Build items
     items: list[dict[str, Any]] = []

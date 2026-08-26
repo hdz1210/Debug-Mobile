@@ -468,7 +468,9 @@ function App() {
           setBindMode(mode);
           try {
             localStorage.setItem("appdbg:bind-mode.v1", mode);
-          } catch {}
+          } catch {
+            // Ignore storage quota / access errors
+          }
         }}
         onCertificate={() => {
           setIsCertificateOpen(true);
@@ -484,7 +486,9 @@ function App() {
             setPort(clamped);
             try {
               localStorage.setItem("appdbg:port.v1", String(clamped));
-            } catch {}
+            } catch {
+              // Ignore storage quota / access errors
+            }
           }
         }}
         onRefreshNetwork={() => void refreshNetworkInfo()}

@@ -6,7 +6,7 @@
 
 A lightweight, standalone desktop proxy and network debugging tool designed specifically for mobile developers. Capture, inspect, and analyze live HTTP/HTTPS traffic, WebSockets, and native binary analytics payloads (Firebase & Branch) in real-time.
 
-[![Release](https://img.shields.io/badge/release-v0.1.6-blue.svg)](https://github.com/hdz1210/Debug-Mobile/releases)
+[![Release](https://img.shields.io/badge/release-v0.1.7-blue.svg)](https://github.com/hdz1210/Debug-Mobile/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey.svg)](https://github.com/hdz1210/Debug-Mobile/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -97,10 +97,10 @@ Automatically unpacks binary Protobuf streams into color-coded event cards, hero
 
 | File | Type | Link |
 | :--- | :--- | :--- |
-| **Setup Installer (Recommended)** | `.exe` | **[Download App-Network-Debugger_0.1.6_windows-x64-setup.exe](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.6/App-Network-Debugger_0.1.6_windows-x64-setup.exe)** |
-| **Enterprise MSI Package** | `.msi` | [Download App-Network-Debugger_0.1.6_windows-x64.msi](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.6/App-Network-Debugger_0.1.6_windows-x64.msi) |
-| **Checksum Verification** | `.txt` | [Verify SHA256SUMS.txt](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.6/SHA256SUMS.txt) |
-| **All Releases** | GitHub | [View GitHub Releases Page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.6) |
+| **Setup Installer (Recommended)** | `.exe` | **[Download App-Network-Debugger_0.1.7_windows-x64-setup.exe](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.7/App-Network-Debugger_0.1.7_windows-x64-setup.exe)** |
+| **Enterprise MSI Package** | `.msi` | [Download App-Network-Debugger_0.1.7_windows-x64.msi](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.7/App-Network-Debugger_0.1.7_windows-x64.msi) |
+| **Checksum Verification** | `.txt` | [Verify SHA256SUMS.txt](https://github.com/hdz1210/Debug-Mobile/releases/download/v0.1.7/SHA256SUMS.txt) |
+| **All Releases** | GitHub | [View GitHub Releases Page](https://github.com/hdz1210/Debug-Mobile/releases/tag/v0.1.7) |
 
 > [!NOTE]
 > **Windows SmartScreen Prompt**: The installer is an open-source tool and is not yet code-signed with a paid Microsoft certificate. On first launch, if Windows SmartScreen appears, click **More info** → **Run anyway** to start.
