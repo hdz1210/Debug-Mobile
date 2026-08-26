@@ -196,7 +196,7 @@ describe("har-export", () => {
 
     expect(har.log.version).toBe("1.2");
     expect(har.log.creator.name).toBe("App Network Debugger");
-    expect(har.log.creator.version).toBe("0.1.7");
+    expect(har.log.creator.version).toBe("0.1.8");
     expect(har.log.pages).toEqual([]);
     expect(har.log.entries).toHaveLength(2);
 

@@ -1,3 +1,5 @@
+import { IconCertificate } from "../common/Icons";
+
 type ConsentDialogProps = {
   open: boolean;
   onCancel: () => void;
@@ -15,21 +17,31 @@ export function ConsentDialog({
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <section
-        className="consent-dialog"
+      <div
+        className="dialog-card consent-dialog-card"
         role="dialog"
         aria-modal="true"
         aria-labelledby="consent-title"
       >
-        <p className="eyebrow">Authorization required</p>
-        <h2 id="consent-title">Inspect only traffic you are allowed to test</h2>
-        <p>
-          Captured traffic may contain passwords, tokens, cookies, and personal
-          data. Only inspect applications, devices, and traffic that you own or
-          are explicitly authorized to test.
-        </p>
-        <div className="dialog-actions">
-          <button className="button" type="button" onClick={onCancel}>
+        <div className="dialog-header">
+          <div className="dialog-header-title">
+            <IconCertificate size={16} className="dialog-shield-icon" />
+            <h2 id="consent-title">Authorization Required</h2>
+          </div>
+        </div>
+
+        <div className="dialog-body">
+          <h3 className="consent-headline">Inspect only traffic you are authorized to test</h3>
+          <p className="consent-desc">
+            Captured network traffic may contain sensitive information including authentication tokens, API keys, session cookies, and personal data.
+          </p>
+          <p className="consent-desc">
+            Only inspect applications, mobile devices, and network streams that you own or have explicit authorization to monitor and test.
+          </p>
+        </div>
+
+        <div className="dialog-footer">
+          <button className="button button-subtle" type="button" onClick={onCancel}>
             Cancel
           </button>
           <button
@@ -40,7 +52,7 @@ export function ConsentDialog({
             I understand, start capture
           </button>
         </div>
-      </section>
+      </div>
     </div>
   );
 }

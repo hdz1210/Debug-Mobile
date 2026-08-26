@@ -45,6 +45,7 @@ src-tauri/release-resources/
 *.sln
 *.sw?
 release-artifacts/
+dist-release/
 
 # Impeccable
 .impeccable/

@@ -1,5 +1,6 @@
 import type { NetworkFlow } from "../../types/events";
 import { analysisLabel } from "../analytics/analytics-format";
+import { IconDownload } from "../common/Icons";
 
 type NetworkTableProps = {
   flows: NetworkFlow[];
@@ -64,35 +65,37 @@ export function NetworkTable({
   return (
     <section className="request-list" aria-label="Network requests">
       <div className="panel-heading">
-        <div>
+        <div className="panel-title-group">
           <h2>Network requests</h2>
-          <p>
+          <span className="count-pill">
             {flows.length === totalFlowCount
               ? `${totalFlowCount} captured`
               : `${flows.length} of ${totalFlowCount} shown`}
-          </p>
+          </span>
         </div>
         <div className="network-export-actions" aria-busy={isExporting}>
           <button
-            className="button"
+            className="button button-subtle"
             type="button"
             disabled={isExporting || checkedFlowIds.size === 0}
             onClick={onExportSelected}
           >
-            Export selected ({checkedFlowIds.size})
+            <IconDownload size={13} />
+            <span>Export selected ({checkedFlowIds.size})</span>
           </button>
           <button
-            className="button"
+            className="button button-subtle"
             type="button"
             disabled={isExporting || totalFlowCount === 0}
             onClick={onExportAll}
           >
-            Export all ({totalFlowCount})
+            <IconDownload size={13} />
+            <span>Export all ({totalFlowCount})</span>
           </button>
         </div>
       </div>
 
-      <div className="table-scroll">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Network requests table">
         <table>
           <thead>
             <tr>
@@ -129,8 +132,12 @@ export function NetworkTable({
             {flows.length === 0 ? (
               <tr>
                 <td className="empty-state" colSpan={8}>
-                  Start capture, configure the target to use this proxy, then
-                  make a request.
+                  <div className="empty-state-content">
+                    <p className="empty-state-title">No network requests captured</p>
+                    <p className="empty-state-hint">
+                      Start capture, configure your mobile phone Wi-Fi proxy or local client, and make requests.
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -139,6 +146,13 @@ export function NetworkTable({
                   key={flow.id}
                   className={selectedFlowId === flow.id ? "selected" : ""}
                   data-state={flow.state}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect(flow.id);
+                    }
+                  }}
                   onClick={() => onSelect(flow.id)}
                 >
                   <td className="selection-cell">
@@ -154,11 +168,11 @@ export function NetworkTable({
                     />
                   </td>
                   <td className="method" data-method={flow.method ?? ""}>
-                    {flow.method ?? "—"}
+                    <span className="method-pill">{flow.method ?? "—"}</span>
                   </td>
                   <td className="request-name" title={flow.url}>
                     <div className="request-name-content">
-                      <span>{flow.path ?? flow.url ?? flow.id}</span>
+                      <span className="request-url-path">{flow.path ?? flow.url ?? flow.id}</span>
                       {flow.analysis ? (
                         <span
                           className="service-badge"
@@ -170,10 +184,10 @@ export function NetworkTable({
                       ) : null}
                     </div>
                   </td>
-                  <td>{flow.host ?? "—"}</td>
+                  <td className="host-cell">{flow.host ?? "—"}</td>
                   <td>
                     <span
-                      className="status-code"
+                      className="status-code tabular-nums"
                       data-status={
                         flow.error
                           ? "failed"
@@ -183,13 +197,13 @@ export function NetworkTable({
                       {flow.error ? "Failed" : (flow.statusCode ?? "Pending")}
                     </span>
                   </td>
-                  <td>{contentType(flow)}</td>
-                  <td>
+                  <td className="type-cell">{contentType(flow)}</td>
+                  <td className="size-cell tabular-nums">
                     {formatBytes(
                       flow.responseBody?.size ?? flow.requestBody?.size,
                     )}
                   </td>
-                  <td>{formatDuration(flow.durationMs)}</td>
+                  <td className="time-cell tabular-nums">{formatDuration(flow.durationMs)}</td>
                 </tr>
               ))
             )}

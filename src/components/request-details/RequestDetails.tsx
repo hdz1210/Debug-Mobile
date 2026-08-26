@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { NetworkFlow } from "../../types/events";
 import { AnalyticsPanel } from "../analytics/AnalyticsPanel";
 import { BodyViewer } from "./body-viewer";
+import { IconCheck, IconCopy } from "../common/Icons";
 
 type RequestDetailsProps = {
   flow: NetworkFlow | null;
@@ -33,8 +34,37 @@ function formatTimestamp(timestamp?: number | null): string {
   return new Date(timestamp * 1_000).toLocaleString();
 }
 
-async function copyText(text: string): Promise<void> {
-  await navigator.clipboard.writeText(text);
+function CopyButton({
+  text,
+  label = "Copy raw",
+}: {
+  text: string;
+  label?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // Ignore clipboard error
+    }
+  };
+
+  return (
+    <button
+      className="text-button copy-feedback-btn"
+      type="button"
+      disabled={!text}
+      onClick={handleCopy}
+    >
+      {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+      <span>{copied ? "Copied" : label}</span>
+    </button>
+  );
 }
 
 function OverviewPanel({ flow }: { flow: NetworkFlow }) {
@@ -64,7 +94,9 @@ function OverviewPanel({ flow }: { flow: NetworkFlow }) {
       {details.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
-          <dd>{value}</dd>
+          <dd className={label === "Duration" || label === "Status code" ? "tabular-nums" : ""}>
+            {value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -84,14 +116,7 @@ function HeaderSection({
     <section className="detail-section">
       <div className="section-title">
         <h3>{title}</h3>
-        <button
-          className="text-button"
-          type="button"
-          disabled={!raw}
-          onClick={() => void copyText(raw)}
-        >
-          Copy raw
-        </button>
+        <CopyButton text={raw} />
       </div>
       {headers?.length ? (
         <table className="key-value-table">
@@ -139,13 +164,7 @@ function QueryPanel({ flow }: { flow: NetworkFlow }) {
     <section className="detail-section">
       <div className="section-title">
         <h3>Query parameters</h3>
-        <button
-          className="text-button"
-          type="button"
-          onClick={() => void copyText(rawQuery)}
-        >
-          Copy raw
-        </button>
+        <CopyButton text={rawQuery} />
       </div>
       <table className="key-value-table">
         <tbody>
@@ -178,37 +197,37 @@ function TimingPanel({ flow }: { flow: NetworkFlow }) {
   const rows = [
     ["Request start", formatTimestamp(flow.requestStartedAt), "0.00 ms"],
     [
-      "Request end",
+      "Request ended",
       formatTimestamp(flow.requestEndedAt),
       relative(flow.requestEndedAt),
     ],
     [
-      "Response start",
+      "Response started",
       formatTimestamp(flow.responseStartedAt),
       relative(flow.responseStartedAt),
     ],
     [
-      "Response end",
+      "Response ended",
       formatTimestamp(flow.responseEndedAt),
       relative(flow.responseEndedAt),
-    ],
-    [
-      "Total duration",
-      flow.durationMs === undefined || flow.durationMs === null
-        ? "—"
-        : `${flow.durationMs.toFixed(2)} ms`,
-      "",
     ],
   ];
 
   return (
-    <table className="key-value-table timing-table">
+    <table className="timing-table">
+      <thead>
+        <tr>
+          <th>Phase</th>
+          <th>Timestamp</th>
+          <th>Relative</th>
+        </tr>
+      </thead>
       <tbody>
-        {rows.map(([label, absolute, offset]) => (
-          <tr key={label}>
-            <th>{label}</th>
-            <td>{absolute}</td>
-            <td>{offset}</td>
+        {rows.map(([phase, timestamp, offset]) => (
+          <tr key={phase}>
+            <th>{phase}</th>
+            <td className="tabular-nums">{timestamp}</td>
+            <td className="tabular-nums">{offset}</td>
           </tr>
         ))}
       </tbody>
@@ -217,63 +236,51 @@ function TimingPanel({ flow }: { flow: NetworkFlow }) {
 }
 
 function WebSocketPanel({ flow }: { flow: NetworkFlow }) {
-  const [query, setQuery] = useState("");
-  const messages = flow.websocketMessages.filter((message) =>
-    message.data.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  if (!flow.websocketMessages.length) {
+    return <p className="detail-empty">No WebSocket messages recorded.</p>;
+  }
 
   return (
-    <section className="detail-section">
-      <label className="message-search">
-        <span className="visually-hidden">Search WebSocket messages</span>
-        <input
-          type="search"
-          value={query}
-          placeholder="Search messages…"
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </label>
-      {messages.length ? (
-        <div className="message-list">
-          {messages.map((message) => (
-            <article className="message-card" key={message.id}>
-              <header>
-                <span data-direction={message.direction}>
-                  {message.direction === "client_to_server" ? "↑ Client" : "↓ Server"}
-                </span>
-                <time>{formatTimestamp(message.timestamp)}</time>
-                <span>{message.size} B</span>
-                <button
-                  className="text-button"
-                  type="button"
-                  onClick={() => void copyText(message.data)}
-                >
-                  Copy
-                </button>
-              </header>
-              <pre>{message.data}</pre>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="detail-empty">No matching WebSocket messages.</p>
-      )}
-    </section>
+    <div className="websocket-messages">
+      {flow.websocketMessages.map((message, index) => (
+        <article
+          key={`${message.timestamp}:${index}`}
+          className="websocket-message"
+          data-from-client={message.direction === "client_to_server"}
+        >
+          <header>
+            <span className="direction">
+              {message.direction === "client_to_server" ? "Client → Server" : "Server → Client"}
+            </span>
+            <span className="type">{message.format}</span>
+            <time className="tabular-nums">{formatTimestamp(message.timestamp)}</time>
+          </header>
+          <pre>{message.data ?? `[Binary payload: ${message.size} bytes]`}</pre>
+        </article>
+      ))}
+    </div>
   );
 }
 
 export function RequestDetails({ flow }: RequestDetailsProps) {
+  const isAnalyticsFlow =
+    flow?.analysis?.serviceId === "analytics" ||
+    flow?.analysis?.serviceId === "attribution";
+
   const [activeTab, setActiveTab] = useState<DetailTab>(() =>
-    flow?.analysis?.serviceId === "analytics" ? "analytics" : "overview",
+    isAnalyticsFlow ? "analytics" : "overview",
   );
 
   if (!flow) {
     return (
-      <aside className="request-details empty-details">
-        <div>
-          <p className="eyebrow">Request details</p>
-          <h2>Select a request</h2>
-          <p>Headers, payload, response, and timing are attached to each flow.</p>
+      <aside className="request-details" aria-label="Request details">
+        <div className="empty-state">
+          <div className="empty-state-content">
+            <p className="empty-state-title">No request selected</p>
+            <p className="empty-state-hint">
+              Select a request from the table to inspect payload, headers, timings, and decoded analytics.
+            </p>
+          </div>
         </div>
       </aside>
     );
@@ -281,24 +288,37 @@ export function RequestDetails({ flow }: RequestDetailsProps) {
 
   const requestFileName = `${flow.id}-request.bin`;
   const responseFileName = `${flow.id}-response.bin`;
+
   const visibleTabs = tabs.filter(
-    (tab) => tab.id !== "analytics" || flow.analysis?.serviceId === "analytics",
+    (tab) => tab.id !== "analytics" || isAnalyticsFlow,
   );
 
+  const currentTab = visibleTabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : isAnalyticsFlow
+      ? "analytics"
+      : "overview";
+
   return (
-    <aside className="request-details">
+    <aside className="request-details" aria-label="Request details">
       <div className="details-header">
-        <p className="eyebrow" data-method={flow.method ?? ""}>
-          {flow.method ?? "Request"}
-        </p>
-        <h2 title={flow.url}>{flow.path ?? flow.url ?? flow.id}</h2>
+        <div className="details-header-title">
+          <span className="method-pill" data-method={flow.method ?? ""}>
+            {flow.method ?? "HTTP"}
+          </span>
+          <h2 title={flow.url}>{flow.path ?? flow.url ?? flow.id}</h2>
+        </div>
+        <CopyButton text={flow.url ?? ""} label="Copy URL" />
       </div>
-      <nav className="detail-tabs" aria-label="Request detail sections">
+
+      <nav className="details-tabs" role="tablist" aria-label="Request detail sections">
         {visibleTabs.map((tab) => (
           <button
             key={tab.id}
+            className={`details-tab ${currentTab === tab.id ? "active" : ""}`}
             type="button"
-            aria-selected={activeTab === tab.id}
+            role="tab"
+            aria-selected={currentTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
@@ -308,21 +328,22 @@ export function RequestDetails({ flow }: RequestDetailsProps) {
           </button>
         ))}
       </nav>
-      <div className="detail-content">
-        {activeTab === "overview" ? <OverviewPanel flow={flow} /> : null}
-        {activeTab === "analytics" && flow.analysis ? (
+
+      <div className="tab-panel" role="tabpanel">
+        {currentTab === "overview" && <OverviewPanel flow={flow} />}
+        {currentTab === "analytics" && flow.analysis && (
           <AnalyticsPanel analysis={flow.analysis} />
-        ) : null}
-        {activeTab === "headers" ? <HeadersPanel flow={flow} /> : null}
-        {activeTab === "query" ? <QueryPanel flow={flow} /> : null}
-        {activeTab === "payload" ? (
+        )}
+        {currentTab === "headers" && <HeadersPanel flow={flow} />}
+        {currentTab === "query" && <QueryPanel flow={flow} />}
+        {currentTab === "payload" && (
           <BodyViewer
             body={flow.requestBody}
             emptyMessage="This request has no captured payload."
             suggestedFileName={requestFileName}
           />
-        ) : null}
-        {activeTab === "response" ? (
+        )}
+        {currentTab === "response" && (
           <BodyViewer
             body={flow.responseBody}
             emptyMessage={
@@ -333,9 +354,9 @@ export function RequestDetails({ flow }: RequestDetailsProps) {
             imagePreview
             suggestedFileName={responseFileName}
           />
-        ) : null}
-        {activeTab === "timing" ? <TimingPanel flow={flow} /> : null}
-        {activeTab === "websocket" ? <WebSocketPanel flow={flow} /> : null}
+        )}
+        {currentTab === "timing" && <TimingPanel flow={flow} />}
+        {currentTab === "websocket" && <WebSocketPanel flow={flow} />}
       </div>
     </aside>
   );

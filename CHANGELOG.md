@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.8] - 2026-08-26
+
+### Changed
+
+- Complete UI/UX overhaul adhering to the **Impeccable Design System** (`audit`, `critique`, `distill`, `polish`).
+- Replaced all Unicode emojis with handcrafted vector SVG icons (`Icons.tsx`) for professional aesthetic.
+- Enhanced Accessibility (A11y) with ARIA roles, full keyboard navigation, and high-contrast focus rings.
+- Fixed layout thrashing with GPU-accelerated transforms and applied tabular numerals (`tabular-nums`) to prevent layout jitter.
+- Refined Analytics Inspector with formatted cards, status badges, hero chips, and structured Consent Dialog.
+
 ## [0.1.7] - 2026-08-26
 
 ### Added

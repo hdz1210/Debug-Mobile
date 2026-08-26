@@ -456,7 +456,7 @@ export function buildHar(
       version: "1.2",
       creator: {
         name: "App Network Debugger",
-        version: "0.1.7",
+        version: "0.1.8",
       },
       pages: [],
       entries: flows.map((flow) => flowToHarEntry(flow, exportedAt)),

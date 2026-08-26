@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 import type { FlowAnalysisBundle, FlowAnalysisEvent, NetworkFlow } from "../../types/events";
 import { ObjectTreeViewer } from "./ObjectTreeViewer";
+import {
+  IconCheck,
+  IconChevronDown,
+  IconChevronRight,
+  IconCopy,
+  IconFlame,
+  IconSearch,
+  IconTrash,
+} from "../common/Icons";
 
 type ViewMode = "flat" | "batch" | "screen";
 export type ProviderTab = "firebase" | "branch" | "all";
@@ -98,82 +107,79 @@ export function AnalyticsWorkspace({
             0;
 
           list.push({
-            id: `${flow.id}-${idx}`,
-            globalIndex: idx,
+            id: `${flow.id}_${bundle.bundleSequentialIndex || 0}_${ev.name}_${idx}`,
+            globalIndex: idx++,
             flowId: flow.id,
-            flowUrl: flow.url || "",
+            flowUrl: flow.url ?? "",
             providerId,
             event: ev,
             bundle,
             screenName,
             timestamp,
           });
-          idx++;
         }
       }
     }
+
     return list;
   }, [flows]);
 
-  // Filter events by activeProvider and search
+  // Filter events by Active Provider & Search Query
   const filteredEvents = useMemo(() => {
     return allFlattenedEvents.filter((item) => {
-      // Provider filter
-      if (activeProvider === "firebase" && item.providerId !== "firebase" && item.providerId !== "firebase-native" && item.providerId !== "measurement-protocol") {
-        return false;
-      }
-      if (activeProvider === "branch" && item.providerId !== "branch" && item.providerId !== "branch-json") {
+      // 1. Filter by provider tab
+      if (activeProvider !== "all" && item.providerId !== activeProvider) {
         return false;
       }
 
-      // Text search filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const evName = item.event.name.toLowerCase();
-        const screen = item.screenName.toLowerCase();
-        const appId = (item.bundle.appId || "").toLowerCase();
-        const paramsMatch = Object.entries(item.event.parameters || {}).some(
-          ([k, v]) =>
-            k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q),
-        );
-        return evName.includes(q) || screen.includes(q) || appId.includes(q) || paramsMatch;
+      // 2. Filter by search query
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+
+      if (item.event.name.toLowerCase().includes(q)) return true;
+      if (item.screenName.toLowerCase().includes(q)) return true;
+      if (item.bundle.appId && item.bundle.appId.toLowerCase().includes(q)) return true;
+
+      // Check in parameters
+      const params = item.event.parameters || {};
+      for (const [k, v] of Object.entries(params)) {
+        if (k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q)) {
+          return true;
+        }
       }
 
-      return true;
+      return false;
     });
   }, [allFlattenedEvents, activeProvider, searchQuery]);
 
-  // Currently selected event
+  // Current selected event
   const selectedEvent = useMemo(() => {
-    if (!selectedEventId) {
-      return filteredEvents[0] || null;
+    if (!filteredEvents.length) return null;
+    if (selectedEventId) {
+      const found = filteredEvents.find((e) => e.id === selectedEventId);
+      if (found) return found;
     }
-    return filteredEvents.find((e) => e.id === selectedEventId) || filteredEvents[0] || null;
+    return filteredEvents[filteredEvents.length - 1]; // default to latest
   }, [filteredEvents, selectedEventId]);
 
-  // Grouped by Batch (Flow)
+  // Groupings
   const groupedBatches = useMemo(() => {
     const map = new Map<string, FlattenedEvent[]>();
-    for (const item of filteredEvents) {
-      const key = item.flowId;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
+    for (const ev of filteredEvents) {
+      if (!map.has(ev.flowId)) map.set(ev.flowId, []);
+      map.get(ev.flowId)!.push(ev);
     }
     return Array.from(map.entries()).map(([flowId, events]) => ({
       flowId,
-      url: events[0]?.flowUrl || "",
-      appId: events[0]?.bundle.appId || "",
       events,
     }));
   }, [filteredEvents]);
 
-  // Grouped by Screen
   const groupedScreens = useMemo(() => {
     const map = new Map<string, FlattenedEvent[]>();
-    for (const item of filteredEvents) {
-      const key = item.screenName;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
+    for (const ev of filteredEvents) {
+      if (!map.has(ev.screenName)) map.set(ev.screenName, []);
+      map.get(ev.screenName)!.push(ev);
     }
     return Array.from(map.entries()).map(([screenName, events]) => ({
       screenName,
@@ -271,25 +277,27 @@ export function AnalyticsWorkspace({
       {/* Main Workspace Split Layout */}
       <div className="analytics-body-layout">
         {/* Left Sidebar: Filter, Modes & Event Stream */}
-        <aside className="analytics-sidebar">
+        <aside className="analytics-sidebar" aria-label="Analytics event stream">
           {/* Header Controls */}
           <div className="sidebar-header-bar">
             <div className="sidebar-filter-box">
-              <span className="search-icon">🔍</span>
+              <IconSearch className="search-icon" size={13} />
               <input
                 className="sidebar-search-input"
                 placeholder="Filter events, params, app ID…"
                 type="search"
+                aria-label="Filter analytics events"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
             <div className="sidebar-actions-row">
-              <div className="view-mode-bar">
+              <div className="view-mode-bar" role="group" aria-label="Event grouping modes">
                 <button
                   className={`mode-btn ${viewMode === "flat" ? "active" : ""}`}
                   type="button"
+                  aria-pressed={viewMode === "flat"}
                   onClick={() => setViewMode("flat")}
                 >
                   Flat
@@ -297,6 +305,7 @@ export function AnalyticsWorkspace({
                 <button
                   className={`mode-btn ${viewMode === "batch" ? "active" : ""}`}
                   type="button"
+                  aria-pressed={viewMode === "batch"}
                   onClick={() => setViewMode("batch")}
                 >
                   Batch
@@ -304,6 +313,7 @@ export function AnalyticsWorkspace({
                 <button
                   className={`mode-btn ${viewMode === "screen" ? "active" : ""}`}
                   type="button"
+                  aria-pressed={viewMode === "screen"}
                   onClick={() => setViewMode("screen")}
                 >
                   Screen
@@ -315,18 +325,20 @@ export function AnalyticsWorkspace({
                   className="sidebar-util-btn"
                   title="Copy all events JSON"
                   type="button"
+                  aria-label="Copy all events JSON"
                   onClick={handleExportAllJson}
                 >
-                  {copiedKey === "export-all" ? "✓" : "📋"}
+                  {copiedKey === "export-all" ? <IconCheck size={13} /> : <IconCopy size={13} />}
                 </button>
                 {onClearFlows && (
                   <button
                     className="sidebar-util-btn"
                     title="Clear all events"
                     type="button"
+                    aria-label="Clear all events"
                     onClick={onClearFlows}
                   >
-                    🗑️
+                    <IconTrash size={13} />
                   </button>
                 )}
               </div>
@@ -334,7 +346,7 @@ export function AnalyticsWorkspace({
           </div>
 
           {/* Events Stream List */}
-          <div className="events-stream-list">
+          <div className="events-stream-list" role="list" aria-label="Event timeline">
             {filteredEvents.length === 0 ? (
               <div className="empty-stream-notice">
                 {flows.length === 0
@@ -349,9 +361,18 @@ export function AnalyticsWorkspace({
                   <div
                     key={item.id}
                     className={`stream-event-item ${isSelected ? "selected" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-selected={isSelected}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedEventId(item.id);
+                      }
+                    }}
                     onClick={() => setSelectedEventId(item.id)}
                   >
-                    <span className="event-stream-index">{indexNum}</span>
+                    <span className="event-stream-index tabular-nums">{indexNum}</span>
                     <span className="event-stream-name" title={item.event.name}>
                       {item.event.name}
                     </span>
@@ -368,15 +389,24 @@ export function AnalyticsWorkspace({
                 <div key={batch.flowId} className="stream-group-block">
                   <div className="stream-group-header">
                     <strong>Batch #{bIdx + 1}</strong>
-                    <span>{batch.events.length} events</span>
+                    <span className="tabular-nums">{batch.events.length} events</span>
                   </div>
                   {batch.events.map((item) => (
                     <div
                       key={item.id}
                       className={`stream-event-item ${selectedEvent?.id === item.id ? "selected" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-selected={selectedEvent?.id === item.id}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedEventId(item.id);
+                        }
+                      }}
                       onClick={() => setSelectedEventId(item.id)}
                     >
-                      <span className="event-stream-index">{item.globalIndex}</span>
+                      <span className="event-stream-index tabular-nums">{item.globalIndex}</span>
                       <span className="event-stream-name">{item.event.name}</span>
                     </div>
                   ))}
@@ -387,15 +417,24 @@ export function AnalyticsWorkspace({
                 <div key={screenGroup.screenName} className="stream-group-block">
                   <div className="stream-group-header">
                     <strong>{screenGroup.screenName}</strong>
-                    <span>{screenGroup.events.length} events</span>
+                    <span className="tabular-nums">{screenGroup.events.length} events</span>
                   </div>
                   {screenGroup.events.map((item) => (
                     <div
                       key={item.id}
                       className={`stream-event-item ${selectedEvent?.id === item.id ? "selected" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-selected={selectedEvent?.id === item.id}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedEventId(item.id);
+                        }
+                      }}
                       onClick={() => setSelectedEventId(item.id)}
                     >
-                      <span className="event-stream-index">{item.globalIndex}</span>
+                      <span className="event-stream-index tabular-nums">{item.globalIndex}</span>
                       <span className="event-stream-name">{item.event.name}</span>
                     </div>
                   ))}
@@ -406,7 +445,7 @@ export function AnalyticsWorkspace({
         </aside>
 
         {/* Right Panel: Detail Accordions */}
-        <main className="analytics-details-panel">
+        <main className="analytics-details-panel" aria-label="Event inspector details">
           {selectedEvent ? (
             <div className="event-details-scroller">
               {/* Event Title Header */}
@@ -430,24 +469,36 @@ export function AnalyticsWorkspace({
                       )
                     }
                   >
-                    {copiedKey === "copy-event" ? "✓ Copied JSON" : "Copy JSON"}
+                    {copiedKey === "copy-event" ? (
+                      <>
+                        <IconCheck size={13} />
+                        <span>Copied JSON</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconCopy size={13} />
+                        <span>Copy JSON</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
 
               {/* Accordion 1: Overview (7) */}
               <div className="accordion-section">
-                <div
+                <button
                   className="accordion-header"
+                  type="button"
+                  aria-expanded={openSections.overview}
                   onClick={() => toggleSection("overview")}
                 >
                   <span className="accordion-title">
                     Overview ({overviewFields.length})
                   </span>
                   <span className="accordion-toggle-icon">
-                    {openSections.overview ? "▲" : "▼"}
+                    {openSections.overview ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                   </span>
-                </div>
+                </button>
                 {openSections.overview && (
                   <div className="accordion-content">
                     <table className="analytics-prop-table">
@@ -458,11 +509,21 @@ export function AnalyticsWorkspace({
                             <td
                               className="prop-val-cell clickable-copy"
                               title="Click to copy"
-                              onClick={() => handleCopy(field.value, field.key)}
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  void handleCopy(field.value, field.key);
+                                }
+                              }}
+                              onClick={() => void handleCopy(field.value, field.key)}
                             >
                               <span>{field.value}</span>
                               {copiedKey === field.key ? (
-                                <span className="copy-check">✓ Copied</span>
+                                <span className="copy-check">
+                                  <IconCheck size={11} />
+                                  <span>Copied</span>
+                                </span>
                               ) : null}
                             </td>
                           </tr>
@@ -477,6 +538,15 @@ export function AnalyticsWorkspace({
               <div className="accordion-section">
                 <div
                   className="accordion-header"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={openSections.eventData}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleSection("eventData");
+                    }
+                  }}
                   onClick={() => toggleSection("eventData")}
                 >
                   <div className="header-left-title">
@@ -491,21 +561,24 @@ export function AnalyticsWorkspace({
                       <input
                         checked={hideSystemParams}
                         type="checkbox"
+                        aria-label="Hide internal system parameters"
                         onChange={(e) => setHideSystemParams(e.target.checked)}
                       />
                     </label>
                     <span className="accordion-toggle-icon">
-                      {openSections.eventData ? "▲" : "▼"}
+                      {openSections.eventData ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                     </span>
                   </div>
                 </div>
 
                 {openSections.eventData && (
                   <div className="accordion-content">
-                    <div className="subtabs-bar">
+                    <div className="subtabs-bar" role="tablist">
                       <button
                         className={`subtab-btn ${eventDataTab === "params" ? "active" : ""}`}
                         type="button"
+                        role="tab"
+                        aria-selected={eventDataTab === "params"}
                         onClick={() => setEventDataTab("params")}
                       >
                         Event Parameters ({eventParameters.length})
@@ -513,6 +586,8 @@ export function AnalyticsWorkspace({
                       <button
                         className={`subtab-btn ${eventDataTab === "user_props" ? "active" : ""}`}
                         type="button"
+                        role="tab"
+                        aria-selected={eventDataTab === "user_props"}
                         onClick={() => setEventDataTab("user_props")}
                       >
                         User Properties ({userPropertiesList.length})
@@ -535,11 +610,21 @@ export function AnalyticsWorkspace({
                                 <td
                                   className="prop-val-cell clickable-copy"
                                   title="Click to copy"
-                                  onClick={() => handleCopy(String(v), k)}
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      void handleCopy(String(v), k);
+                                    }
+                                  }}
+                                  onClick={() => void handleCopy(String(v), k)}
                                 >
                                   <span>{String(v)}</span>
                                   {copiedKey === k ? (
-                                    <span className="copy-check">✓ Copied</span>
+                                    <span className="copy-check">
+                                      <IconCheck size={11} />
+                                      <span>Copied</span>
+                                    </span>
                                   ) : null}
                                 </td>
                               </tr>
@@ -560,11 +645,21 @@ export function AnalyticsWorkspace({
                               <td
                                 className="prop-val-cell clickable-copy"
                                 title="Click to copy"
-                                onClick={() => handleCopy(String(v), k)}
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    void handleCopy(String(v), k);
+                                  }
+                                }}
+                                onClick={() => void handleCopy(String(v), k)}
                               >
                                 <span>{String(v)}</span>
                                 {copiedKey === k ? (
-                                  <span className="copy-check">✓ Copied</span>
+                                  <span className="copy-check">
+                                    <IconCheck size={11} />
+                                    <span>Copied</span>
+                                  </span>
                                 ) : null}
                               </td>
                             </tr>
@@ -579,17 +674,19 @@ export function AnalyticsWorkspace({
               {/* Accordion 3: Ecommerce Items (if any) */}
               {selectedEvent.event.items && selectedEvent.event.items.length > 0 && (
                 <div className="accordion-section">
-                  <div
+                  <button
                     className="accordion-header"
+                    type="button"
+                    aria-expanded={openSections.ecommerce}
                     onClick={() => toggleSection("ecommerce")}
                   >
                     <span className="accordion-title">
                       Ecommerce Items ({selectedEvent.event.items.length})
                     </span>
                     <span className="accordion-toggle-icon">
-                      {openSections.ecommerce ? "▲" : "▼"}
+                      {openSections.ecommerce ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                     </span>
-                  </div>
+                  </button>
                   {openSections.ecommerce && (
                     <div className="accordion-content">
                       <div className="ecommerce-items-container">
@@ -624,17 +721,19 @@ export function AnalyticsWorkspace({
               {/* Accordion 4: Shared Metadata (30) */}
               {sharedMetadataList.length > 0 && (
                 <div className="accordion-section">
-                  <div
+                  <button
                     className="accordion-header"
+                    type="button"
+                    aria-expanded={openSections.shared}
                     onClick={() => toggleSection("shared")}
                   >
                     <span className="accordion-title">
                       Shared Device &amp; Bundle Metadata ({sharedMetadataList.length})
                     </span>
                     <span className="accordion-toggle-icon">
-                      {openSections.shared ? "▲" : "▼"}
+                      {openSections.shared ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                     </span>
-                  </div>
+                  </button>
                   {openSections.shared && (
                     <div className="accordion-content">
                       <table className="analytics-prop-table">
@@ -645,11 +744,21 @@ export function AnalyticsWorkspace({
                               <td
                                 className="prop-val-cell clickable-copy"
                                 title="Click to copy"
-                                onClick={() => handleCopy(String(v), k)}
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    void handleCopy(String(v), k);
+                                  }
+                                }}
+                                onClick={() => void handleCopy(String(v), k)}
                               >
                                 <span>{String(v)}</span>
                                 {copiedKey === k ? (
-                                  <span className="copy-check">✓ Copied</span>
+                                  <span className="copy-check">
+                                    <IconCheck size={11} />
+                                    <span>Copied</span>
+                                  </span>
                                 ) : null}
                               </td>
                             </tr>
@@ -663,15 +772,17 @@ export function AnalyticsWorkspace({
 
               {/* Accordion 5: Raw Event Tree Viewer */}
               <div className="accordion-section">
-                <div
+                <button
                   className="accordion-header"
+                  type="button"
+                  aria-expanded={openSections.raw}
                   onClick={() => toggleSection("raw")}
                 >
                   <span className="accordion-title">Raw Object Tree</span>
                   <span className="accordion-toggle-icon">
-                    {openSections.raw ? "▲" : "▼"}
+                    {openSections.raw ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
                   </span>
-                </div>
+                </button>
                 {openSections.raw && (
                   <div className="accordion-content">
                     <div className="object-tree-root">
@@ -683,7 +794,9 @@ export function AnalyticsWorkspace({
             </div>
           ) : (
             <div className="no-event-selected-placeholder">
-              <span className="placeholder-icon">📊</span>
+              <span className="placeholder-icon">
+                <IconFlame size={32} />
+              </span>
               <h3>No Analytics Event Selected</h3>
               <p>
                 Capture or select an analytics request to inspect events,

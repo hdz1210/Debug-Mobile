@@ -3,6 +3,22 @@ import type {
   CaptureStatusSnapshot,
   NetworkInfo,
 } from "../../types/events";
+import {
+  IconBranch,
+  IconCertificate,
+  IconCheck,
+  IconCopy,
+  IconFlame,
+  IconGlobe,
+  IconHistory,
+  IconLogs,
+  IconPause,
+  IconPlay,
+  IconRefresh,
+  IconSearch,
+  IconStop,
+  IconTrash,
+} from "../common/Icons";
 
 export type WorkspaceView = "network" | "firebase" | "branch" | "all";
 
@@ -90,7 +106,7 @@ export function CaptureToolbar({
   };
 
   return (
-    <header className="app-unified-toolbar">
+    <header className="app-unified-toolbar" role="banner">
       {/* Top Row: Brand, Workspace Tabs, Utility Actions */}
       <div className="toolbar-top-row">
         {/* Brand & Status */}
@@ -114,21 +130,25 @@ export function CaptureToolbar({
         </div>
 
         {/* Center: Workspaces / Segmented Control Tabs */}
-        <nav className="workspace-tabs-segmented" aria-label="Workspaces">
+        <nav className="workspace-tabs-segmented" aria-label="Workspace views">
           <button
             className={`segmented-tab ${workspaceView === "network" ? "active" : ""}`}
             type="button"
+            aria-selected={workspaceView === "network"}
             onClick={() => onWorkspaceViewChange("network")}
           >
-            <span>🌐 Network Traffic</span>
+            <IconGlobe className="tab-icon" size={14} />
+            <span>Network Traffic</span>
             <span className="seg-count">{totalFlowCount}</span>
           </button>
           <button
             className={`segmented-tab ${workspaceView === "firebase" ? "active" : ""}`}
             type="button"
+            aria-selected={workspaceView === "firebase"}
             onClick={() => onWorkspaceViewChange("firebase")}
           >
-            <span>🔥 Firebase</span>
+            <IconFlame className="tab-icon highlight-fire-icon" size={14} />
+            <span>Firebase</span>
             {analyticsCounts.firebaseCount > 0 && (
               <span className="seg-count highlight-fire">
                 {analyticsCounts.firebaseCount}
@@ -138,9 +158,11 @@ export function CaptureToolbar({
           <button
             className={`segmented-tab ${workspaceView === "branch" ? "active" : ""}`}
             type="button"
+            aria-selected={workspaceView === "branch"}
             onClick={() => onWorkspaceViewChange("branch")}
           >
-            <span>✈️ Branch</span>
+            <IconBranch className="tab-icon highlight-branch-icon" size={14} />
+            <span>Branch</span>
             {analyticsCounts.branchCount > 0 && (
               <span className="seg-count highlight-branch">
                 {analyticsCounts.branchCount}
@@ -153,22 +175,23 @@ export function CaptureToolbar({
         <div className="toolbar-utilities">
           <div className="proxy-quick-config">
             <label className="config-label">
-              <span>BIND</span>
+              <span className="config-key">Bind</span>
               <select
                 className="config-select"
                 disabled={isProxyActive}
                 value={bindMode}
+                aria-label="Proxy network interface bind mode"
                 onChange={(e) =>
                   onBindModeChange(e.target.value as "local" | "lan")
                 }
               >
-                <option value="lan">LAN devices</option>
-                <option value="local">Local only</option>
+                <option value="lan">LAN (Mobile)</option>
+                <option value="local">Localhost</option>
               </select>
             </label>
 
             <label className="config-label">
-              <span>PORT</span>
+              <span className="config-key">Port</span>
               <input
                 className="config-port-input"
                 disabled={isProxyActive}
@@ -176,6 +199,7 @@ export function CaptureToolbar({
                 min={1}
                 type="number"
                 value={port}
+                aria-label="Proxy port number"
                 onChange={(e) => onPortChange(e.target.valueAsNumber)}
               />
             </label>
@@ -189,7 +213,7 @@ export function CaptureToolbar({
               type="button"
               onClick={onCertificate}
             >
-              <span className="btn-icon">🔐</span>
+              <IconCertificate size={14} />
               <span>Certificate</span>
             </button>
             <button
@@ -199,7 +223,7 @@ export function CaptureToolbar({
               type="button"
               onClick={onHistory}
             >
-              <span className="btn-icon">🕒</span>
+              <IconHistory size={14} />
               <span>History</span>
             </button>
             <button
@@ -208,7 +232,7 @@ export function CaptureToolbar({
               type="button"
               onClick={onOpenLogs}
             >
-              <span className="btn-icon">📄</span>
+              <IconLogs size={14} />
               <span>Logs</span>
             </button>
           </div>
@@ -226,7 +250,8 @@ export function CaptureToolbar({
               type="button"
               onClick={onStart}
             >
-              ▶ Start capture
+              <IconPlay size={14} />
+              <span>Start capture</span>
             </button>
           ) : (
             <>
@@ -236,7 +261,8 @@ export function CaptureToolbar({
                 type="button"
                 onClick={canResume ? onResume : onPause}
               >
-                {canResume ? "▶ Resume" : "⏸ Pause"}
+                {canResume ? <IconPlay size={14} /> : <IconPause size={14} />}
+                <span>{canResume ? "Resume" : "Pause"}</span>
               </button>
               <button
                 className="button button-danger stop-btn"
@@ -245,7 +271,8 @@ export function CaptureToolbar({
                 type="button"
                 onClick={onStop}
               >
-                ⏹ Stop
+                <IconStop size={14} />
+                <span>Stop</span>
               </button>
             </>
           )}
@@ -256,15 +283,16 @@ export function CaptureToolbar({
             type="button"
             onClick={onClear}
           >
-            🗑 Clear
+            <IconTrash size={14} />
+            <span>Clear</span>
           </button>
         </div>
 
         {/* Center: Live Mobile Proxy IP badge */}
         <div className="mobile-ip-badge-container">
           {bindMode === "lan" ? (
-            <div className="mobile-ip-badge" title="Configure your phone Wi-Fi proxy to this IP and Port">
-              <span className="badge-icon">📱</span>
+            <div className="mobile-ip-badge" title="Configure your phone Wi-Fi HTTP proxy to this IP and Port">
+              <span className="badge-pulse" aria-hidden="true" />
               <span className="badge-label">Phone Wi-Fi Proxy:</span>
               <strong className="badge-ip">{currentTargetAddress}</strong>
               {lanIp && (
@@ -274,24 +302,24 @@ export function CaptureToolbar({
                   type="button"
                   onClick={handleCopyIp}
                 >
-                  {copiedIp ? "✓ Copied" : "Copy IP"}
+                  {copiedIp ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                  <span>{copiedIp ? "Copied" : "Copy"}</span>
                 </button>
               )}
               {onRefreshNetwork && (
                 <button
-                  className="badge-refresh-btn"
+                  className={`badge-refresh-btn ${isScanningNetwork ? "scanning" : ""}`}
                   disabled={isScanningNetwork}
-                  title="Scan for network changes"
+                  title="Scan for network IP changes"
                   type="button"
                   onClick={onRefreshNetwork}
                 >
-                  {isScanningNetwork ? "…" : "🔄"}
+                  <IconRefresh size={12} />
                 </button>
               )}
             </div>
           ) : (
             <div className="mobile-ip-badge local-badge">
-              <span className="badge-icon">💻</span>
               <span className="badge-label">Local Proxy:</span>
               <strong className="badge-ip">{currentTargetAddress}</strong>
             </div>
@@ -301,11 +329,12 @@ export function CaptureToolbar({
         {/* Right: Search Box */}
         <div className="search-box-wrapper">
           <label className="search-input-container">
-            <span className="search-icon">🔍</span>
+            <IconSearch className="search-icon" size={14} />
             <input
               className="global-search-input"
               placeholder="Search URL, path, method, status…"
               type="search"
+              aria-label="Filter network traffic"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
             />

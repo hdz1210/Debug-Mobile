@@ -10,6 +10,14 @@ import {
   formatAnalysisValue,
   humanizeAnalysisStatus,
 } from "./analytics-format";
+import {
+  IconCheck,
+  IconChevronDown,
+  IconChevronRight,
+  IconClose,
+  IconCopy,
+  IconSearch,
+} from "../common/Icons";
 
 type AnalyticsPanelProps = {
   analysis: FlowAnalysis;
@@ -150,12 +158,22 @@ function ObjectTable({
             <td
               className="param-value-cell"
               title="Click to copy value"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  void handleCopy(name, value);
+                }
+              }}
               onClick={() => void handleCopy(name, value)}
             >
               <div className="param-value-wrap">
                 <pre>{formatAnalysisValue(value)}</pre>
                 {copiedKey === name ? (
-                  <span className="copy-tag">Copied!</span>
+                  <span className="copy-tag">
+                    <IconCheck size={11} />
+                    <span>Copied!</span>
+                  </span>
                 ) : null}
               </div>
             </td>
@@ -182,7 +200,7 @@ function BundleMetadata({ bundle }: { bundle: FlowAnalysisBundle }) {
       {metadata.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
-          <dd>{value}</dd>
+          <dd className="tabular-nums">{value}</dd>
         </div>
       ))}
     </dl>
@@ -227,7 +245,7 @@ function EventCard({
     >
       <header className="event-card-header" onClick={onToggle}>
         <div className="event-header-left">
-          <span className="event-index-pill">#{index + 1}</span>
+          <span className="event-index-pill tabular-nums">#{index + 1}</span>
           <h4 className="event-title">{event.name}</h4>
           <span className="event-category-badge" data-category={category}>
             {categoryLabel}
@@ -242,18 +260,18 @@ function EventCard({
           ) : null}
 
           {timeStr ? (
-            <time className="event-meta-pill time-pill" title={fullTime ?? ""}>
-              🕒 {timeStr}
+            <time className="event-meta-pill time-pill tabular-nums" title={fullTime ?? ""}>
+              {timeStr}
             </time>
           ) : null}
 
-          <span className="event-meta-pill param-count-pill">
+          <span className="event-meta-pill param-count-pill tabular-nums">
             {paramCount} {paramCount === 1 ? "param" : "params"}
           </span>
 
           {event.items.length ? (
-            <span className="event-meta-pill items-count-pill">
-              🛍️ {event.items.length} {event.items.length === 1 ? "item" : "items"}
+            <span className="event-meta-pill items-count-pill tabular-nums">
+              {event.items.length} {event.items.length === 1 ? "item" : "items"}
             </span>
           ) : null}
 
@@ -263,7 +281,17 @@ function EventCard({
             title="Copy full event JSON"
             onClick={copyEventJson}
           >
-            {copyStatus ?? "Copy JSON"}
+            {copyStatus ? (
+              <>
+                <IconCheck size={11} />
+                <span>Copied</span>
+              </>
+            ) : (
+              <>
+                <IconCopy size={11} />
+                <span>Copy JSON</span>
+              </>
+            )}
           </button>
 
           <button
@@ -272,12 +300,12 @@ function EventCard({
             aria-label={isOpen ? "Collapse event" : "Expand event"}
             aria-expanded={isOpen}
           >
-            {isOpen ? "▲" : "▼"}
+            {isOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
           </button>
         </div>
       </header>
 
-      {/* Hero chips row visible when summary contains key highlights */}
+      {/* Hero chips row */}
       {heroChips.length > 0 ? (
         <div className="event-hero-chips" onClick={onToggle}>
           {heroChips.map((chip) => (
@@ -384,7 +412,7 @@ function BundleCard({
           <p className="eyebrow">Bundle #{index + 1}</p>
           <h3>{title}</h3>
         </div>
-        <span className="bundle-events-pill">
+        <span className="bundle-events-pill tabular-nums">
           {bundle.events.length} {bundle.events.length === 1 ? "event" : "events"}
         </span>
       </header>
@@ -419,10 +447,11 @@ function BundleCard({
         <div className="analytics-events-container">
           <div className="analytics-events-toolbar">
             <div className="events-search-wrap">
+              <IconSearch size={13} className="search-icon" />
               <input
                 type="search"
                 className="events-search-input"
-                placeholder="Search events by name or parameter (e.g. view_item, Tai nghe)..."
+                placeholder="Search events by name or parameter..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -432,13 +461,13 @@ function BundleCard({
                   className="search-clear-btn"
                   onClick={() => setSearchQuery("")}
                 >
-                  ✕
+                  <IconClose size={12} />
                 </button>
               ) : null}
             </div>
 
             <div className="events-actions-wrap">
-              <span className="events-counter-badge">
+              <span className="events-counter-badge tabular-nums">
                 {filteredEvents.length === bundle.events.length
                   ? `${bundle.events.length} events`
                   : `${filteredEvents.length} of ${bundle.events.length} events`}
@@ -516,22 +545,22 @@ export function AnalyticsPanel({ analysis }: AnalyticsPanelProps) {
         <div>
           <p className="eyebrow">Analysis</p>
           <h3>{analysisLabel(analysis)}</h3>
-          <p>
+          <p className="analytics-protocol-line">
             {analysis.protocol} · parser {analysis.parserVersion}
             {analysis.platform ? ` · ${analysis.platform}` : ""}
           </p>
         </div>
         <div className="analytics-summary-stats">
-          <span>
-            <strong>{analysis.bundles.length}</strong> bundles
+          <span className="summary-stat-pill">
+            <strong className="tabular-nums">{analysis.bundles.length}</strong> bundles
           </span>
-          <span>
-            <strong>{eventCount}</strong> events
+          <span className="summary-stat-pill">
+            <strong className="tabular-nums">{eventCount}</strong> events
           </span>
-          <span>
-            <strong>{formatConfidence(analysis.confidence)}</strong> confidence
+          <span className="summary-stat-pill">
+            <strong className="tabular-nums">{formatConfidence(analysis.confidence)}</strong> confidence
           </span>
-          <span className="analysis-status" data-status={normalizedStatus}>
+          <span className="analysis-status-badge" data-status={normalizedStatus}>
             {humanizeAnalysisStatus(analysis.status)}
           </span>
         </div>
@@ -540,7 +569,7 @@ export function AnalyticsPanel({ analysis }: AnalyticsPanelProps) {
       {analysis.tags.length ? (
         <div className="analytics-tags" aria-label="Analysis tags">
           {analysis.tags.map((tag) => (
-            <span key={tag}>{tag}</span>
+            <span key={tag} className="analytics-tag-pill">{tag}</span>
           ))}
         </div>
       ) : null}
