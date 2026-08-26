@@ -45,3 +45,9 @@ src-tauri/release-resources/
 *.sln
 *.sw?
 release-artifacts/
+
+# Impeccable
+.impeccable/
+.agent/
+.claude/skills/impeccable/
+.claude/settings.local.json
