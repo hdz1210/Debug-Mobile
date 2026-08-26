@@ -48,6 +48,7 @@
       "addons/analyzers/protobuf_wire.py": "addons/analyzers/protobuf_wire.py",
       "addons/analyzers/redaction.py": "addons/analyzers/redaction.py",
       "release-resources/mitmdump.exe": "bin/mitmdump.exe",
+      "release-resources/WebView2Loader.dll": "WebView2Loader.dll",
       "../LICENSE": "licenses/Debug-Mobile-LICENSE.txt",
       "../THIRD_PARTY_NOTICES.md": "licenses/THIRD_PARTY_NOTICES.md",
       "third-party/mitmproxy-LICENSE.txt": "licenses/mitmproxy-LICENSE.txt",

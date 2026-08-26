@@ -50,6 +50,17 @@ else {
     ""
 }
 
+$webView2DllTarget = Join-Path $resourceDirectory "WebView2Loader.dll"
+if (-not (Test-Path -LiteralPath $webView2DllTarget -PathType Leaf)) {
+    $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
+    $foundDll = Get-ChildItem -Path (Join-Path $cargoHome "registry") -Filter "WebView2Loader.dll" -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -like "*\x64\*" } |
+        Select-Object -First 1
+    if ($foundDll) {
+        Copy-Item -LiteralPath $foundDll.FullName -Destination $webView2DllTarget -Force
+    }
+}
+
 if (
     $previousRecipe -eq $recipeHash -and
     (Test-Path -LiteralPath $mitmdumpPath -PathType Leaf)
