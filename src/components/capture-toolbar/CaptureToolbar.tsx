@@ -1,4 +1,5 @@
 import { useState } from "react";
+import appLogo from "../../assets/app-logo.png";
 import type {
   CaptureStatusSnapshot,
   NetworkInfo,
@@ -112,7 +113,7 @@ export function CaptureToolbar({
         {/* Brand & Status */}
         <div className="brand-section">
           <div className="brand-icon" aria-hidden="true">
-            <span>A</span>
+            <img src={appLogo} alt="App Logo" className="brand-logo-img" />
           </div>
           <div className="brand-titles">
             <h1 className="brand-name">App Network Debugger</h1>
