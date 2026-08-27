@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.9] - 2026-08-27
+
+### Fixed
+
+- Fixed unstyled layout and text crowding in **Capture History** modal cards with clean metadata rows and action buttons.
+- Fixed header formatting in **Payload & Response BodyViewer** with dedicated format badges, content-type tags, tabular byte counts, and SVG action buttons with copy feedback.
+- Modernized **Phone Certificate Setup** dialog with standard dialog header, SVG icons, and tabular figures.
+
 ## [0.1.8] - 2026-08-26
 
 ### Changed

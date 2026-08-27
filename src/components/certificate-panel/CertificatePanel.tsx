@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import type { CertificateStatus } from "../../types/events";
+import {
+  IconCertificate,
+  IconClose,
+} from "../common/Icons";
 
 type CertificatePanelProps = {
   open: boolean;
@@ -104,22 +108,30 @@ export function CertificatePanel({
   return (
     <div className="dialog-backdrop" role="presentation">
       <section
-        className="certificate-panel"
+        className="certificate-panel dialog-card"
         role="dialog"
         aria-modal="true"
         aria-labelledby="certificate-title"
       >
-        <header>
-          <div>
-            <p className="eyebrow">HTTPS inspection</p>
-            <h2 id="certificate-title">Phone certificate setup</h2>
+        <header className="dialog-header">
+          <div className="dialog-header-title">
+            <IconCertificate size={16} className="dialog-header-icon" />
+            <div>
+              <p className="eyebrow">HTTPS inspection</p>
+              <h2 id="certificate-title">Phone certificate setup</h2>
+            </div>
           </div>
-          <button className="button" type="button" onClick={onClose}>
-            Close
+          <button
+            className="dialog-close-btn"
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <IconClose size={14} />
           </button>
         </header>
 
-        <div className="certificate-content">
+        <div className="dialog-body certificate-content">
           <div className="certificate-setup">
             <div className="certificate-qr" aria-label="QR code for mitm.it">
               {qrCode ? <img src={qrCode} alt="Open mitm.it on the phone" /> : null}
@@ -129,7 +141,7 @@ export function CertificatePanel({
                 <strong>{copy.title}</strong>
                 <span>{copy.message}</span>
               </div>
-              <ol>
+              <ol className="certificate-steps">
                 <li>Start the proxy and set the phone Wi-Fi proxy to this desktop.</li>
                 <li>
                   Scan this QR code or open <code>{status?.installUrl ?? "http://mitm.it"}</code> in Safari.
@@ -153,11 +165,11 @@ export function CertificatePanel({
             <dl className="certificate-details">
               <div>
                 <dt>SHA-256 fingerprint</dt>
-                <dd>{status.fingerprintSha256}</dd>
+                <dd className="tabular-nums">{status.fingerprintSha256}</dd>
               </div>
               <div>
                 <dt>Created</dt>
-                <dd>
+                <dd className="tabular-nums">
                   {status.createdAt
                     ? new Date(status.createdAt * 1_000).toLocaleString()
                     : "Unknown"}
@@ -166,11 +178,11 @@ export function CertificatePanel({
             </dl>
           ) : null}
 
-          {error ? <p className="history-error">{error}</p> : null}
-          {copyMessage ? <p className="body-action-message">{copyMessage}</p> : null}
+          {error ? <p className="history-error" role="alert">{error}</p> : null}
+          {copyMessage ? <p className="body-action-message" role="status">{copyMessage}</p> : null}
         </div>
 
-        <footer className="dialog-actions certificate-actions">
+        <footer className="dialog-footer certificate-actions">
           <button
             className="button"
             type="button"
