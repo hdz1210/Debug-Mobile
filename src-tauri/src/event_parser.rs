@@ -20,6 +20,9 @@ pub struct FlowAnalysisEvent {
     pub origin: Option<String>,
     pub parameters: AnalysisObject,
     pub items: Vec<AnalysisObject>,
+    /// Analyzer fields without a typed slot (session, system params…) pass through unchanged.
+    #[serde(flatten)]
+    pub extra: AnalysisObject,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -38,6 +41,9 @@ pub struct FlowAnalysisBundle {
     pub user_properties: AnalysisObject,
     pub consent: AnalysisObject,
     pub events: Vec<FlowAnalysisEvent>,
+    /// Device, instance IDs and shared metadata from the analyzer pass through unchanged.
+    #[serde(flatten)]
+    pub extra: AnalysisObject,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -326,6 +332,24 @@ mod tests {
             }
             other => panic!("unexpected event: {other:?}"),
         }
+    }
+
+    #[test]
+    fn keeps_untyped_analysis_fields_when_reserialized() {
+        let event = parse_event_line(concat!(
+            "APPDBG_EVENT:",
+            r#"{"event":"request_completed","flowId":"analytics-flow","body":null,"endedAt":2.0,"analysis":{"providerId":"firebase","providerLabel":"Firebase","serviceId":"analytics","serviceLabel":"Analytics","protocol":"firebase-native-protobuf","confidence":0.99,"status":"decoded","parserVersion":"1","tags":[],"bundles":[{"appId":"com.example.app","osVersion":"26.0.1","gmpAppId":"1:1:ios:a","shared":{"field_31":2611021},"userProperties":{},"consent":{},"events":[{"name":"_e","sessionId":1793679294,"systemParameters":{"_o":"auto"},"parameters":{},"items":[]}]}],"warnings":[]}}"#
+        ))
+        .expect("analytics event should parse")
+        .expect("analytics event should not be ignored");
+
+        let json = serde_json::to_value(&event).expect("event should serialize");
+        let bundle = &json["analysis"]["bundles"][0];
+        assert_eq!(bundle["osVersion"], "26.0.1");
+        assert_eq!(bundle["gmpAppId"], "1:1:ios:a");
+        assert_eq!(bundle["shared"]["field_31"], 2611021);
+        assert_eq!(bundle["events"][0]["sessionId"], 1793679294);
+        assert_eq!(bundle["events"][0]["systemParameters"]["_o"], "auto");
     }
 
     #[test]

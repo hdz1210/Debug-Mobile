@@ -20,6 +20,28 @@ def firebase_fixture() -> bytes:
     )
 
 
+def _pb_varint(value: int) -> bytes:
+    value &= (1 << 64) - 1
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
+
+def _pb_int(number: int, value: int) -> bytes:
+    return _pb_varint(number << 3) + _pb_varint(value)
+
+
+def _pb_bytes(number: int, value: bytes | str) -> bytes:
+    data = value.encode() if isinstance(value, str) else value
+    return _pb_varint((number << 3) | 2) + _pb_varint(len(data)) + data
+
+
 class AnalyticsAnalyzerTests(unittest.TestCase):
     def test_native_firebase_batch_decodes_events_properties_items_and_consent(
         self,
@@ -88,6 +110,49 @@ class AnalyticsAnalyzerTests(unittest.TestCase):
                 self.assertEqual(analysis["serviceId"], service_id)
                 self.assertEqual(analysis["status"], "identified")
                 self.assertEqual(analysis["bundles"], [])
+
+    def test_native_firebase_bundle_metadata_uses_ios_field_numbers(self) -> None:
+        event = _pb_bytes(2, "screen_view") + _pb_int(3, 1_793_679_854_871)
+        user_property = _pb_int(1, 1) + _pb_bytes(2, "_sid") + _pb_int(4, 1_793_679_294)
+        bundle = b"".join(
+            [
+                _pb_int(1, 1),
+                _pb_bytes(2, event),
+                _pb_bytes(3, user_property),
+                _pb_bytes(8, "ios"),
+                _pb_bytes(9, "26.0.1"),
+                _pb_bytes(10, "iPhone15,4"),
+                _pb_bytes(11, "vi-us"),
+                _pb_int(12, 420),
+                _pb_bytes(14, "com.example.app"),
+                _pb_bytes(16, "1.0.0"),
+                _pb_int(17, 111500),
+                _pb_bytes(21, "INSTANCE"),
+                _pb_bytes(25, "1:123:ios:abc"),
+                _pb_bytes(30, "fid"),
+                _pb_int(31, 2611021),
+            ]
+        )
+        analysis = analyze_request(
+            "https://app-analytics-services-att.com/a", _pb_bytes(1, bundle)
+        )
+
+        self.assertIsNotNone(analysis)
+        self.assertEqual(analysis["status"], "decoded")
+        decoded = analysis["bundles"][0]
+        self.assertEqual(decoded["appId"], "com.example.app")
+        self.assertEqual(decoded["appVersion"], "1.0.0")
+        self.assertEqual(decoded["platform"], "ios")
+        self.assertEqual(decoded["osVersion"], "26.0.1")
+        self.assertEqual(decoded["deviceModel"], "iPhone15,4")
+        self.assertEqual(decoded["timeZoneOffsetMinutes"], 420)
+        self.assertEqual(decoded["gmpAppId"], "1:123:ios:abc")
+        self.assertEqual(decoded["appInstanceId"], "INSTANCE")
+        self.assertEqual(decoded["firebaseInstanceId"], "fid")
+        self.assertEqual(decoded["sessionId"], 1_793_679_294)
+        self.assertEqual(decoded["shared"]["field_31"], 2611021)
+        self.assertEqual(decoded["events"][0]["appId"], "com.example.app")
+        self.assertEqual(decoded["events"][0]["sessionId"], 1_793_679_294)
 
     def test_malformed_and_unknown_native_protobuf_fail_safely(self) -> None:
         malformed = analyze_request(

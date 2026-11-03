@@ -1,17 +1,28 @@
 import { useMemo, useState } from "react";
 import type { FlowAnalysisBundle, FlowAnalysisEvent, NetworkFlow } from "../../types/events";
+import {
+  appNameFromHeaders,
+  buildSessionExport,
+  eventTimestampMs,
+  resolveSessionId,
+  resolveSessionNum,
+  sessionKey,
+  suggestSessionFileName,
+} from "../../lib/firebase-session";
+import { saveJsonExport } from "../../lib/ipc";
 import { ObjectTreeViewer } from "./ObjectTreeViewer";
 import {
   IconCheck,
   IconChevronDown,
   IconChevronRight,
   IconCopy,
+  IconDownload,
   IconFlame,
   IconSearch,
   IconTrash,
 } from "../common/Icons";
 
-type ViewMode = "flat" | "batch" | "screen";
+type ViewMode = "flat" | "batch" | "screen" | "session";
 export type ProviderTab = "firebase" | "branch" | "all";
 
 type FlattenedEvent = {
@@ -24,6 +35,10 @@ type FlattenedEvent = {
   bundle: FlowAnalysisBundle;
   screenName: string;
   timestamp: number;
+  appName: string | null;
+  sessionId: string | null;
+  sessionNum: string | null;
+  sessionKey: string;
 };
 
 type AnalyticsWorkspaceProps = {
@@ -52,6 +67,13 @@ const SYSTEM_KEYS = new Set([
   "firebase_screen_id",
 ]);
 
+// GA4 hits (e.g. from in-app web views) are listed with Firebase, matching the tab badge.
+function matchesProviderTab(providerId: string, tab: ProviderTab): boolean {
+  if (tab === "all") return true;
+  if (tab === "firebase") return providerId !== "branch";
+  return providerId === tab;
+}
+
 export function AnalyticsWorkspace({
   flows,
   activeProvider,
@@ -63,6 +85,8 @@ export function AnalyticsWorkspace({
   const [hideSystemParams, setHideSystemParams] = useState(true);
   const [eventDataTab, setEventDataTab] = useState<"params" | "user_props">("params");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [exportingSessionKey, setExportingSessionKey] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Accordion open states
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -89,6 +113,7 @@ export function AnalyticsWorkspace({
       if (!analysis || !analysis.bundles) continue;
 
       const providerId = analysis.providerId || "firebase";
+      const headerAppName = appNameFromHeaders(flow.requestHeaders);
 
       for (const bundle of analysis.bundles) {
         for (const ev of bundle.events) {
@@ -98,13 +123,11 @@ export function AnalyticsWorkspace({
               params._sc ||
               params.firebase_screen ||
               params.screen_name ||
+              params.dt ||
               "(No Screen)",
           );
-          const timestamp =
-            ev.timestampMs ||
-            (ev.timestampMicros ? Math.floor(ev.timestampMicros / 1000) : 0) ||
-            flow.requestStartedAt ||
-            0;
+          const timestamp = eventTimestampMs(ev, flow.requestStartedAt);
+          const sessionId = resolveSessionId(ev, bundle);
 
           list.push({
             id: `${flow.id}_${bundle.bundleSequentialIndex || 0}_${ev.name}_${idx}`,
@@ -116,6 +139,13 @@ export function AnalyticsWorkspace({
             bundle,
             screenName,
             timestamp,
+            appName:
+              bundle.appName ||
+              headerAppName ||
+              (bundle.measurementId ? `GA4 ${bundle.measurementId}` : null),
+            sessionId,
+            sessionNum: resolveSessionNum(ev, bundle),
+            sessionKey: sessionKey(bundle.appId || ev.appId || bundle.measurementId, sessionId),
           });
         }
       }
@@ -128,7 +158,7 @@ export function AnalyticsWorkspace({
   const filteredEvents = useMemo(() => {
     return allFlattenedEvents.filter((item) => {
       // 1. Filter by provider tab
-      if (activeProvider !== "all" && item.providerId !== activeProvider) {
+      if (!matchesProviderTab(item.providerId, activeProvider)) {
         return false;
       }
 
@@ -139,6 +169,8 @@ export function AnalyticsWorkspace({
       if (item.event.name.toLowerCase().includes(q)) return true;
       if (item.screenName.toLowerCase().includes(q)) return true;
       if (item.bundle.appId && item.bundle.appId.toLowerCase().includes(q)) return true;
+      if (item.appName && item.appName.toLowerCase().includes(q)) return true;
+      if (item.sessionId && item.sessionId.includes(q)) return true;
 
       // Check in parameters
       const params = item.event.parameters || {};
@@ -187,6 +219,48 @@ export function AnalyticsWorkspace({
     }));
   }, [filteredEvents]);
 
+  const groupedSessions = useMemo(() => {
+    const map = new Map<string, FlattenedEvent[]>();
+    for (const ev of filteredEvents) {
+      if (!map.has(ev.sessionKey)) map.set(ev.sessionKey, []);
+      map.get(ev.sessionKey)!.push(ev);
+    }
+    return Array.from(map.entries()).map(([key, events]) => ({
+      key,
+      events,
+      first: events[0],
+    }));
+  }, [filteredEvents]);
+
+  // Export every captured event of a session, ignoring the search filter.
+  const handleExportSession = async (key: string) => {
+    const sessionEvents = allFlattenedEvents.filter(
+      (item) =>
+        item.sessionKey === key && matchesProviderTab(item.providerId, activeProvider),
+    );
+    if (sessionEvents.length === 0) return;
+
+    const first = sessionEvents[0];
+    const exportedAt = new Date();
+    setExportingSessionKey(key);
+    setExportError(null);
+    try {
+      const content = JSON.stringify(buildSessionExport(sessionEvents, exportedAt), null, 2);
+      await saveJsonExport(
+        content,
+        suggestSessionFileName(
+          first.appName || first.bundle.appId || null,
+          first.sessionId,
+          exportedAt,
+        ),
+      );
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExportingSessionKey(null);
+    }
+  };
+
   const handleCopy = async (text: string, key: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -218,26 +292,20 @@ export function AnalyticsWorkspace({
     const evParams = ev.parameters || {};
 
     const trackingEndpoint = selectedEvent.flowUrl;
+    const appName = selectedEvent.appName || "(not set)";
     const appId = b.appId || ev.appId || evParams.app_id || "(not set)";
+    const appVersion = b.appVersion || "(not set)";
     const appInstanceId = b.appInstanceId || "(not set)";
     const firebaseInstanceId = b.firebaseInstanceId || "(not set)";
     const gmpAppId = b.gmpAppId || "(not set)";
-    const sessionId =
-      ev.sessionId ||
-      b.sessionId ||
-      evParams._sid ||
-      evParams.ga_session_id ||
-      "(not set)";
-    const sessionNum =
-      ev.sessionNum ??
-      b.sessionNum ??
-      evParams._sno ??
-      evParams.ga_session_number ??
-      "(not set)";
+    const sessionId = selectedEvent.sessionId ?? "(not set)";
+    const sessionNum = selectedEvent.sessionNum ?? "(not set)";
 
     return [
       { key: "tracking_endpoint", label: "tracking_endpoint", value: trackingEndpoint },
+      { key: "app_name", label: "app_name", value: String(appName) },
       { key: "app_id", label: "app_id", value: String(appId) },
+      { key: "app_version", label: "app_version", value: String(appVersion) },
       { key: "app_instance_id", label: "app_instance_id", value: String(appInstanceId) },
       { key: "firebase_instance_id", label: "firebase_instance_id", value: String(firebaseInstanceId) },
       { key: "gmp_app_id", label: "gmp_app_id", value: String(gmpAppId) },
@@ -318,6 +386,14 @@ export function AnalyticsWorkspace({
                 >
                   Screen
                 </button>
+                <button
+                  className={`mode-btn ${viewMode === "session" ? "active" : ""}`}
+                  type="button"
+                  aria-pressed={viewMode === "session"}
+                  onClick={() => setViewMode("session")}
+                >
+                  Session
+                </button>
               </div>
 
               <div className="sidebar-util-btns">
@@ -376,9 +452,12 @@ export function AnalyticsWorkspace({
                     <span className="event-stream-name" title={item.event.name}>
                       {item.event.name}
                     </span>
-                    {item.bundle.appId && (
-                      <span className="event-stream-app-pill" title={item.bundle.appId}>
-                        {item.bundle.appId}
+                    {(item.appName || item.bundle.appId) && (
+                      <span
+                        className="event-stream-app-pill"
+                        title={item.bundle.appId || item.appName || undefined}
+                      >
+                        {item.appName || item.bundle.appId}
                       </span>
                     )}
                   </div>
@@ -392,6 +471,48 @@ export function AnalyticsWorkspace({
                     <span className="tabular-nums">{batch.events.length} events</span>
                   </div>
                   {batch.events.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`stream-event-item ${selectedEvent?.id === item.id ? "selected" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-selected={selectedEvent?.id === item.id}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedEventId(item.id);
+                        }
+                      }}
+                      onClick={() => setSelectedEventId(item.id)}
+                    >
+                      <span className="event-stream-index tabular-nums">{item.globalIndex}</span>
+                      <span className="event-stream-name">{item.event.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ))
+            ) : viewMode === "session" ? (
+              groupedSessions.map((group) => (
+                <div key={group.key} className="stream-group-block">
+                  <div className="stream-group-header">
+                    <div className="session-group-title">
+                      <strong>{group.first.appName || group.first.bundle.appId || "Unknown app"}</strong>
+                      <span className="tabular-nums">
+                        Session {group.first.sessionId ?? "(not set)"} · {group.events.length} events
+                      </span>
+                    </div>
+                    <button
+                      className="sidebar-util-btn"
+                      type="button"
+                      title="Export this session as JSON"
+                      aria-label="Export this session as JSON"
+                      disabled={exportingSessionKey !== null}
+                      onClick={() => void handleExportSession(group.key)}
+                    >
+                      <IconDownload size={13} />
+                    </button>
+                  </div>
+                  {group.events.map((item) => (
                     <div
                       key={item.id}
                       className={`stream-event-item ${selectedEvent?.id === item.id ? "selected" : ""}`}
@@ -462,6 +583,20 @@ export function AnalyticsWorkspace({
                   <button
                     className="hero-copy-json-btn"
                     type="button"
+                    title="Save every event of this session as a JSON file"
+                    disabled={exportingSessionKey !== null}
+                    onClick={() => void handleExportSession(selectedEvent.sessionKey)}
+                  >
+                    <IconDownload size={13} />
+                    <span>
+                      {exportingSessionKey === selectedEvent.sessionKey
+                        ? "Exporting…"
+                        : "Export session"}
+                    </span>
+                  </button>
+                  <button
+                    className="hero-copy-json-btn"
+                    type="button"
                     onClick={() =>
                       handleCopy(
                         JSON.stringify(selectedEvent.event, null, 2),
@@ -484,7 +619,13 @@ export function AnalyticsWorkspace({
                 </div>
               </div>
 
-              {/* Accordion 1: Overview (7) */}
+              {exportError ? (
+                <div className="analytics-export-error" role="alert">
+                  Export failed: {exportError}
+                </div>
+              ) : null}
+
+              {/* Accordion 1: Overview */}
               <div className="accordion-section">
                 <button
                   className="accordion-header"

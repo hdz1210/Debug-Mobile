@@ -177,6 +177,20 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(body["data"], "AAEC/w==")
         self.assertEqual(body["size"], 4)
 
+    def test_binary_body_with_form_content_type_is_base64_encoded(self) -> None:
+        payload = b"\n\x22\n\x03ios\x22\x05vi-us8\xb1N\x12\x2c"
+        request = http.Request.make(
+            "POST",
+            "https://app-analytics-services.com/sdk-exp",
+            content=payload,
+            headers={"content-type": "application/x-www-form-urlencoded"},
+        )
+
+        body = bridge.serialize_body(request, body_limit=1_000)
+
+        self.assertEqual(body["format"], "base64")
+        self.assertEqual(body["data"], b64encode(payload).decode("ascii"))
+
     def test_native_firebase_body_preserves_exact_decoded_bytes_as_base64(self) -> None:
         decoded = bytes.fromhex(
             (FIXTURE_DIRECTORY / "firebase_native_batch.hex").read_text(encoding="ascii")

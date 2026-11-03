@@ -2319,6 +2319,34 @@ tbody tr.selected td:first-child {
   transition: all 0.15s;
 }
 
+.hero-copy-json-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.session-group-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.session-group-title strong {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-export-error {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.5rem;
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+  font-size: 0.78rem;
+}
+
 .hero-copy-json-btn:hover {
   background: var(--bg-muted);
   color: var(--accent-primary);
