@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.10] - 2026-11-03
+
+### Added
+
+- **Firebase app name**: every analytics event shows the app name (read from the iOS User-Agent), plus `app_name`, `app_id` and `app_version` in Overview.
+- **Session export**: new **Session** grouping and **Export session** button that saves every event of a Firebase/GA4 session as JSON with app, device and session summary.
+- GA4 hits sent from in-app WebViews are listed in the Firebase tab, labelled `GA4 <measurement ID>`, grouped by their `sid` session.
+
+### Fixed
+
+- Firebase native bundles were decoded with shifted field numbers (`app_id` showed the time-zone offset, e.g. `420`); bundle metadata is now mapped to the correct fields.
+- Device info, instance IDs, shared metadata and event session IDs were dropped between the analyzer and the UI.
+- Binary request bodies sent with a text content type (e.g. Firebase `/sdk-exp`) were corrupted when stored; they are now kept as base64.
+- The Firebase tab list did not match its badge count when GA4 web hits were captured.
+- Events without their own timestamp were dated 1970 in session exports.
+
 ## [0.1.9] - 2026-08-27
 
 ### Fixed
