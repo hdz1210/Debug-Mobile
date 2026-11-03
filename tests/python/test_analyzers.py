@@ -154,6 +154,17 @@ class AnalyticsAnalyzerTests(unittest.TestCase):
         self.assertEqual(decoded["events"][0]["appId"], "com.example.app")
         self.assertEqual(decoded["events"][0]["sessionId"], 1_793_679_294)
 
+    def test_native_firebase_large_integers_are_emitted_as_strings(self) -> None:
+        screen_instance = _pb_bytes(1, "_si") + _pb_int(3, -6_787_640_828_919_729_123)
+        event = _pb_bytes(1, screen_instance) + _pb_bytes(2, "_e")
+        analysis = analyze_request(
+            "https://app-analytics-services-att.com/a",
+            _pb_bytes(1, _pb_bytes(2, event)),
+        )
+
+        params = analysis["bundles"][0]["events"][0]["parameters"]
+        self.assertEqual(params["_si"], "-6787640828919729123")
+
     def test_malformed_and_unknown_native_protobuf_fail_safely(self) -> None:
         malformed = analyze_request(
             "https://app-measurement.com/a",

@@ -21,6 +21,14 @@ _CONSENT_KEYS = {
 }
 
 
+# Integers beyond 2^53 lose precision in JavaScript (e.g. the _si screen instance id).
+_MAX_SAFE_JS_INTEGER = (1 << 53) - 1
+
+
+def _json_safe_int(value: int) -> int | str:
+    return value if abs(value) <= _MAX_SAFE_JS_INTEGER else str(value)
+
+
 @dataclass(slots=True)
 class _DecodedParam:
     name: str | None
@@ -132,7 +140,7 @@ def _decode_param(data: bytes, warnings: list[str], depth: int = 0) -> _DecodedP
         elif field.number == 3:
             value = _varint(field, f"parameter {name or '<unnamed>'} integer value", warnings)
             if value is not None:
-                values.append(signed_int64(value))
+                values.append(_json_safe_int(signed_int64(value)))
         elif field.number == 4:
             value = _fixed_number(
                 field,
@@ -297,7 +305,7 @@ def _decode_user_property(
         elif field.number == 4:
             value = _varint(field, f"user property {name or '<unnamed>'} value", warnings)
             if value is not None:
-                values.append(signed_int64(value))
+                values.append(_json_safe_int(signed_int64(value)))
         elif field.number == 5:
             value = _fixed_number(
                 field,
@@ -445,7 +453,7 @@ def _decode_bundle(
             elif num in _BUNDLE_INT_FIELDS:
                 val = _scalar(field)
                 if isinstance(val, int):
-                    metadata[_BUNDLE_INT_FIELDS[num]] = signed_int64(val)
+                    metadata[_BUNDLE_INT_FIELDS[num]] = _json_safe_int(signed_int64(val))
             elif num in _BUNDLE_STRING_FIELDS:
                 metadata[_BUNDLE_STRING_FIELDS[num]] = str(_scalar(field))
             else:

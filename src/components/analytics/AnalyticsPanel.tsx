@@ -25,9 +25,10 @@ type AnalyticsPanelProps = {
 
 type EventCategory = "ecommerce" | "screen_view" | "engagement" | "session" | "custom";
 
-function formatConfidence(confidence: number): string {
-  const percentage = confidence <= 1 ? confidence * 100 : confidence;
-  return `${Math.round(Math.max(0, Math.min(100, percentage)))}%`;
+const PLATFORM_LABELS: Record<string, string> = { ios: "iOS", android: "Android", web: "Web" };
+
+function plural(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
 }
 
 function formatEventTimestamp(event: FlowAnalysisEvent): string | null {
@@ -184,12 +185,15 @@ function ObjectTable({
   );
 }
 
-function BundleMetadata({ bundle }: { bundle: FlowAnalysisBundle }) {
+function BundleMetadata({ bundle, title }: { bundle: FlowAnalysisBundle; title: string }) {
+  const platform = PLATFORM_LABELS[bundle.platform?.toLowerCase() ?? ""] ?? bundle.platform;
+  const os = [platform, bundle.osVersion].filter(Boolean).join(" ");
   const metadata = [
-    ["App ID", bundle.appId],
-    ["App name", bundle.appName],
-    ["App version", bundle.appVersion],
-    ["Platform", bundle.platform],
+    // The header already shows the app ID when there is no app name.
+    ["App ID", bundle.appId === title ? undefined : bundle.appId],
+    ["Version", bundle.appVersion],
+    ["OS", os],
+    ["Device", bundle.deviceModel],
     ["Measurement ID", bundle.measurementId],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
 
@@ -355,9 +359,11 @@ function EventCard({
 function BundleCard({
   bundle,
   index,
+  total,
 }: {
   bundle: FlowAnalysisBundle;
   index: number;
+  total: number;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [openStates, setOpenStates] = useState<Record<number, boolean>>({});
@@ -408,16 +414,15 @@ function BundleCard({
   return (
     <article className="analytics-bundle">
       <header className="analytics-bundle-header">
-        <div>
-          <p className="eyebrow">Bundle #{index + 1}</p>
-          <h3>{title}</h3>
-        </div>
-        <span className="bundle-events-pill tabular-nums">
-          {bundle.events.length} {bundle.events.length === 1 ? "event" : "events"}
-        </span>
+        <h3>{title}</h3>
+        {total > 1 ? (
+          <span className="bundle-index-label tabular-nums">
+            Bundle {index + 1} of {total}
+          </span>
+        ) : null}
       </header>
 
-      <BundleMetadata bundle={bundle} />
+      <BundleMetadata bundle={bundle} title={title} />
 
       {Object.keys(bundle.userProperties).length > 0 ? (
         <details className="analytics-property-section">
@@ -469,8 +474,8 @@ function BundleCard({
             <div className="events-actions-wrap">
               <span className="events-counter-badge tabular-nums">
                 {filteredEvents.length === bundle.events.length
-                  ? `${bundle.events.length} events`
-                  : `${filteredEvents.length} of ${bundle.events.length} events`}
+                  ? plural(bundle.events.length, "event")
+                  : `${filteredEvents.length} of ${plural(bundle.events.length, "event")}`}
               </span>
               <button
                 type="button"
@@ -542,37 +547,24 @@ export function AnalyticsPanel({ analysis }: AnalyticsPanelProps) {
   return (
     <section className="analytics-panel" aria-label="Analytics analysis">
       <header className="analytics-summary">
-        <div>
-          <p className="eyebrow">Analysis</p>
+        <div className="analytics-summary-title">
           <h3>{analysisLabel(analysis)}</h3>
-          <p className="analytics-protocol-line">
-            {analysis.protocol} · parser {analysis.parserVersion}
-            {analysis.platform ? ` · ${analysis.platform}` : ""}
-          </p>
-        </div>
-        <div className="analytics-summary-stats">
-          <span className="summary-stat-pill">
-            <strong className="tabular-nums">{analysis.bundles.length}</strong> bundles
-          </span>
-          <span className="summary-stat-pill">
-            <strong className="tabular-nums">{eventCount}</strong> events
-          </span>
-          <span className="summary-stat-pill">
-            <strong className="tabular-nums">{formatConfidence(analysis.confidence)}</strong> confidence
-          </span>
           <span className="analysis-status-badge" data-status={normalizedStatus}>
             {humanizeAnalysisStatus(analysis.status)}
           </span>
+          <span className="analytics-summary-count tabular-nums">
+            {plural(analysis.bundles.length, "bundle")} · {plural(eventCount, "event")}
+          </span>
         </div>
-      </header>
-
-      {analysis.tags.length ? (
-        <div className="analytics-tags" aria-label="Analysis tags">
+        <ul className="analytics-protocol-line" aria-label="Decoder details">
+          <li>{analysis.protocol}</li>
+          {analysis.platform ? <li>{analysis.platform}</li> : null}
+          <li>parser {analysis.parserVersion}</li>
           {analysis.tags.map((tag) => (
-            <span key={tag} className="analytics-tag-pill">{tag}</span>
+            <li key={tag} className="analytics-tag-pill">{tag}</li>
           ))}
-        </div>
-      ) : null}
+        </ul>
+      </header>
 
       {visibleWarnings.length ? (
         <section className="analytics-warnings" role="status">
@@ -591,6 +583,7 @@ export function AnalyticsPanel({ analysis }: AnalyticsPanelProps) {
             <BundleCard
               bundle={bundle}
               index={index}
+              total={analysis.bundles.length}
               key={bundle.appId ?? bundle.measurementId ?? index}
             />
           ))}
