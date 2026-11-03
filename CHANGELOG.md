@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.11] - 2026-11-03
+
+### Changed
+
+- Request **Analytics** tab: summary, decoder details and tags merged into one compact header; bundle card shows OS and device and no longer repeats the app ID.
+- Removed the "confidence" pill, which was a fixed per-endpoint score rather than a measure of decoding quality.
+
+### Fixed
+
+- Large integer parameters (e.g. Firebase `_si`) were rounded by JavaScript; values beyond 2^53 are now kept exact.
+- "1 events" pluralisation in the analytics event counter.
+
 ## [0.1.10] - 2026-11-03
 
 ### Added
