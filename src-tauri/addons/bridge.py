@@ -186,6 +186,26 @@ def _decoded_content(message: http.Message, raw: bytes) -> bytes:
     return decoded if decoded is not None else raw
 
 
+_BINARY_CONTROL_CHARS = frozenset(chr(code) for code in range(32) if chr(code) not in "\t\n\r")
+
+
+def _decode_text(content: bytes, content_type: str) -> str | None:
+    # Some SDKs (e.g. Firebase /sdk-exp) send protobuf under a text content type;
+    # emit those as base64 so the bytes are not lost to replacement characters.
+    try:
+        text = content.decode(_charset(content_type))
+    except LookupError:
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    except UnicodeDecodeError:
+        return None
+    if any(char in _BINARY_CONTROL_CHARS for char in text):
+        return None
+    return text
+
+
 def _redact_json_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {
@@ -250,11 +270,11 @@ def serialize_body(
     request_url = getattr(message, "pretty_url", "")
     force_base64 = bool(request_url) and is_firebase_native_url(request_url)
 
+    text = None
     if not force_base64 and _is_textual(content_type):
-        try:
-            text = content.decode(_charset(content_type), errors="replace")
-        except LookupError:
-            text = content.decode("utf-8", errors="replace")
+        text = _decode_text(content, content_type)
+
+    if text is not None:
 
         if should_redact:
             text = _redact_text(text, content_type)

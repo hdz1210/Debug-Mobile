@@ -96,6 +96,47 @@ describe("AnalyticsWorkspace", () => {
     expect(html).toContain("fd4L71M5LEkP1eETKNGsfg");
   });
 
+  it("lists GA4 web hits in the Firebase tab so the list matches the badge", () => {
+    const gaFlow: NetworkFlow = {
+      id: "flow-ga",
+      url: "https://www.google-analytics.com/g/collect?v=2&tid=G-TEST",
+      method: "POST",
+      statusCode: 204,
+      websocketMessages: [],
+      state: "completed",
+      analysis: {
+        providerId: "google-analytics",
+        providerLabel: "Google Analytics",
+        serviceId: "analytics",
+        serviceLabel: "Analytics",
+        protocol: "ga4-gtag",
+        confidence: 0.95,
+        status: "decoded",
+        parserVersion: "1.0.0",
+        tags: [],
+        warnings: [],
+        bundles: [
+          {
+            measurementId: "G-TEST",
+            userProperties: {},
+            consent: {},
+            events: [
+              { name: "All_clicks", parameters: { sid: "1793691439" }, items: [] },
+            ],
+          },
+        ],
+      },
+    };
+
+    const html = renderToStaticMarkup(
+      <AnalyticsWorkspace activeProvider="firebase" flows={[...mockFlows, gaFlow]} />,
+    );
+
+    expect(html).toContain("search_flight");
+    expect(html).toContain("All_clicks");
+    expect(html).toContain("GA4 G-TEST");
+  });
+
   it("renders empty placeholder when no flows are present", () => {
     const html = renderToStaticMarkup(
       <AnalyticsWorkspace activeProvider="firebase" flows={[]} />,

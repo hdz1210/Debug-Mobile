@@ -116,6 +116,27 @@ export async function saveNetworkArchive(
   return true;
 }
 
+export async function saveJsonExport(
+  content: string,
+  suggestedFileName: string,
+): Promise<boolean> {
+  const path = await save({
+    title: "Save analytics session",
+    defaultPath: suggestedFileName,
+    filters: [{ name: "JSON", extensions: ["json"] }],
+  });
+  if (!path) {
+    return false;
+  }
+
+  await invoke("save_captured_body", {
+    path,
+    data: content,
+    format: "text",
+  });
+  return true;
+}
+
 export function listSessions(): Promise<SessionSummary[]> {
   return invoke("list_sessions");
 }
